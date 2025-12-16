@@ -2,9 +2,9 @@
 
 ## Phase 1 — Scope & Guarantees
 
-* [ ] Write explicit system guarantees (README & DESIGN.md)
-* [ ] Define what "done" means for MVP
-* [ ] Identify non-goals
+* [x] Write explicit system guarantees (README & DESIGN.md)
+* [x] Define what "done" means for MVP
+* [x] Identify non-goals
 
 ---
 

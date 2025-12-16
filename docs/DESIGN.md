@@ -27,9 +27,11 @@ Naively retrying tasks risks:
 ## Chosen Approach
 
 1. **State-Driven Retries**
+
    Retries are initiated based on replicated workflow state, not local execution outcomes.
 
 2. **Idempotency Keys**
+
    Each task execution is associated with a deterministic idempotency key derived from:
 
    * workflow ID
@@ -37,6 +39,7 @@ Naively retrying tasks risks:
    * execution attempt
 
 3. **Effect Acknowledgment**
+
    A task is only marked complete once its effects are acknowledged and committed via consensus.
 
 ---

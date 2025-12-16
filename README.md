@@ -1,7 +1,6 @@
 # FlowRaft
 
-**A distributed, stateful workflow engine written in Rust**
-Designed for correctness, fault tolerance, and predictable execution under failure.
+**A distributed, stateful workflow engine written in Rust**, designed for correctness, fault tolerance, and predictable execution under failure.
 
 ---
 
@@ -14,9 +13,9 @@ Most workflow engines are optimized for *feature velocity* or *developer ergonom
 * **Clear consistency guarantees** across nodes
 * **Predictable behavior under concurrency**
 
-FlowRaft is an exploration of how far these guarantees can be pushed in a modern Rust-based distributed system without relying on external orchestration platforms.
+FlowRaft is an exploration of how far these guarantees can be pushed in a modern Rust-based distributed system without relying on external orchestration platforms. It is a deliberate systems design exercise intended to mirror real-world tradeoffs encountered in production distributed backends.
 
-This is not a toy project. It is a deliberate systems design exercise intended to mirror real-world tradeoffs encountered in production distributed backends.
+> “The system guarantees and non-goals are explicitly defined in `docs/SCOPE.md`.”
 
 ---
 

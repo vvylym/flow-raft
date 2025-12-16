@@ -1,0 +1,23 @@
+[package]
+name = "flow-raft"
+description = ""
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.91.1"
+license = "MIT"
+readme = "README.md"
+authors = ["Guillaume Mpouli <235853469+vvylym@users.noreply.github.com>"]
+homepage = ""
+repository = ""
+documentation = ""
+keywords = []
+categories = []
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

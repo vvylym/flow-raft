@@ -150,19 +150,10 @@ The focus is correctness, observability, and systems clarity.
 
 FlowRaft is under active development.
 
-Implemented:
-
-* Workflow DAG model
-* Raft-based state replication
-* Basic execution scheduling
-* Deterministic state transitions
-
-In progress:
-
-* Persistence backends
-* Backpressure and rate limiting
-* Execution retries and idempotency strategies
-* Observability (metrics, tracing)
+* [ ] Workflow DAG model
+* [ ] Raft-based state replication
+* [ ] Basic execution scheduling
+* [ ] Deterministic state transitions
 
 Unimplemented aspects are explicit by design — this project favors correctness-first evolution over feature completeness.
 

@@ -1,22 +1,56 @@
 [package]
 name = "flow-raft"
-description = ""
 version = "0.1.0"
+description = "A distributed, stateful workflow engine optimized for correctness, fault tolerance, and deterministic execution."
+authors = ["Guillaume Mpouli <235853469+vvylym@users.noreply.github.com>"]
 edition = "2024"
 rust-version = "1.91.1"
 license = "MIT"
 readme = "README.md"
-authors = ["Guillaume Mpouli <235853469+vvylym@users.noreply.github.com>"]
-homepage = ""
-repository = ""
-documentation = ""
-keywords = []
-categories = []
+homepage = "https://github.com/vvylym/flow-raft"
+repository = "https://github.com/vvylym/flow-raft"
+documentation = "https://github.com/vvylym/flow-raft"
+keywords = [
+    "workflow",
+    "orchestration",
+    "dag",
+    "distributed",
+    "state-machine",
+    "deterministic",
+    "fault-tolerant",
+    "consensus",
+    "raft",
+    "replicated",
+    "stateful",
+    "reliable",
+    "fault-tolerance",
+    "recovery",
+    "coordination",
+    "scheduler",
+    "orchestrator",
+    "task-runner",
+    "workflow-engine",
+    "distributed-systems",
+    "backpressure",
+]
+categories = [
+    "concurrency",
+    "distributed",
+    "asynchronous",
+    "systems",
+    "data-structures",
+    "algorithms",
+    "web-programming",
+    "network-programming",
+]
 publish = false
 
 [dependencies]
+thiserror = "2.0"
+uuid = { version = "1.19", features = ["v4"] }
 
 [dev-dependencies]
+rstest = "0.26"
 
 [lints.rust]
 unsafe_code = "forbid"

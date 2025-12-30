@@ -202,3 +202,17 @@ engine.apply_transition(transition)?;  // Single point of coordination
 
 12. **Transition Validation**: Add validation at the engine level to ensure transitions are valid before applying (defense in depth).
 
+---
+
+## Implementation Status
+
+✅ **Fully Implemented** - Single-writer semantics achieved through Raft consensus:
+
+- **Immutable State**: All transitions return new instances (no locks needed)
+- **Raft Coordination**: Raft leader enforces single-writer semantics (Phase 4)
+- **Timestamp Tracking**: All timestamps implemented (`created_at`, `started_at`, `completed_at`)
+- **Linear History**: Raft log provides linear, ordered history of all transitions
+- **Replication**: State replicated to all followers via Raft consensus
+- **Leader-Only Writes**: Only Raft leader can propose state transitions
+
+The "engine coordination" mentioned in the original design was implemented via Raft consensus (Phase 4), providing distributed single-writer semantics across the cluster. This ensures no split-brain execution and maintains consistency even during leader failures.

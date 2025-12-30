@@ -15,8 +15,9 @@ This directory contains all documentation for FlowRaft. Documents are organized 
 
 ### For Contributors
 - **[notes/](notes/)** - Historical design notes and decision records
-- **[../ROADMAP.md](../ROADMAP.md)** - Implementation status and future work
-- **[../OPTIMIZATION_PLAN.md](../OPTIMIZATION_PLAN.md)** - Performance optimization roadmap
+- **[ROADMAP.md](ROADMAP.md)** - Implementation status and future work
+- **[OPTIMIZATION_PLAN.md](OPTIMIZATION_PLAN.md)** - Performance optimization roadmap
+- **[BENCHMARK_ANALYSIS.md](BENCHMARK_ANALYSIS.md)** - Performance benchmark results
 
 ## Document Overview
 
@@ -55,7 +56,7 @@ When updating documentation:
 
 ## Related Resources
 
-- **README.md** - Project overview and status
-- **ROADMAP.md** - Implementation roadmap
-- **OPTIMIZATION_PLAN.md** - Performance optimization strategy
-- **BENCHMARK_ANALYSIS.md** - Performance benchmark results
+- **[../README.md](../README.md)** - Project overview and status
+- **[ROADMAP.md](ROADMAP.md)** - Implementation roadmap
+- **[OPTIMIZATION_PLAN.md](OPTIMIZATION_PLAN.md)** - Performance optimization strategy
+- **[BENCHMARK_ANALYSIS.md](BENCHMARK_ANALYSIS.md)** - Performance benchmark results

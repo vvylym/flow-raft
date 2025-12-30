@@ -170,4 +170,4 @@ The MVP has been completed with all core guarantees implemented:
 For detailed implementation information, see:
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture
 - [API_GUIDE.md](API_GUIDE.md) - API documentation
-- [ROADMAP.md](../ROADMAP.md) - Implementation status
+- [ROADMAP.md](ROADMAP.md) - Implementation status

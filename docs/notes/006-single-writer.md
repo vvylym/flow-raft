@@ -1,5 +1,9 @@
 # Phase 3 - Single-Writer Semantics
 
+> **Status**: ✅ **Implemented** (Phase 3 - State Machine, Phase 4 - Raft Integration)  
+> **Implementation**: Raft consensus provides single-writer coordination via leader-only writes  
+> **See**: [ROADMAP.md](../ROADMAP.md) for implementation status
+
 ## Alternatives Considered
 
 1. **Lock-based vs Immutable State**
@@ -132,13 +136,14 @@ pub struct TaskExecution {
 }
 ```
 
-### Engine Coordination (To Be Implemented)
-The engine will act as the single coordinator:
-- All state transitions go through engine
-- Engine validates transitions before applying
-- Engine maintains linear history (log)
-- Engine handles conflict resolution
-- Engine supports replication via log replay
+### Engine Coordination (✅ Implemented via Raft)
+The Raft consensus layer provides single-writer coordination:
+- All state transitions go through Raft leader (`FlowRaftApp`)
+- Raft validates and replicates transitions before applying
+- Raft maintains linear history (log entries)
+- Raft handles conflict resolution via consensus
+- Raft supports replication via log replay on followers
+- Implementation: `src/raft/app.rs`, `src/raft/storage/state_machine.rs`
 
 ### Concurrent Read Access
 ```rust

@@ -1,5 +1,9 @@
 # Phase 3 - Transition Logic
 
+> **Status**: ✅ **Implemented** (Phase 3 - State Machine)  
+> **Implementation**: State-based transition modules in `src/core/task/transitions/` and `src/core/workflow/transitions/`  
+> **See**: [ROADMAP.md](../ROADMAP.md) for implementation status
+
 ## Alternatives Considered
 
 1. **State Pattern vs Type-Driven Design**

@@ -160,7 +160,7 @@ FlowRaft has a complete MVP implementation:
 * [x] Comprehensive tests (192 passing)
 * [x] Examples and benchmarks
 
-**Performance**: ~240µs latency, ~1-2K workflows/second (see `OPTIMIZATION_PLAN.md` for 100K/sec roadmap)
+**Performance**: ~240µs latency, ~1-2K workflows/second (see [Optimization Plan](docs/OPTIMIZATION_PLAN.md) for 100K/sec roadmap)
 
 ## Documentation
 
@@ -169,7 +169,9 @@ FlowRaft has a complete MVP implementation:
 - **[API Guide](docs/API_GUIDE.md)**: Complete API reference
 - **[Scope](docs/SCOPE.md)**: System guarantees and non-goals
 - **[Design](docs/DESIGN.md)**: Design rationale and tradeoffs
-- **[Roadmap](ROADMAP.md)**: Implementation status and future work
+- **[Roadmap](docs/ROADMAP.md)**: Implementation status and future work
+- **[Optimization Plan](docs/OPTIMIZATION_PLAN.md)**: Performance optimization roadmap
+- **[Benchmark Analysis](docs/BENCHMARK_ANALYSIS.md)**: Performance benchmark results
 
 ---
 

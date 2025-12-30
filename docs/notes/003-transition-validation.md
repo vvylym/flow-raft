@@ -1,5 +1,9 @@
 # Phase 2 - Transition Validation
 
+> **Status**: ✅ **Implemented** (Phase 2 - Workflow Model)  
+> **Implementation**: Validation in transition methods in `src/core/task/transitions/` and `src/core/workflow/transitions/`  
+> **See**: [ROADMAP.md](../ROADMAP.md) for implementation status
+
 ## Alternatives Considered
 
 1. **Runtime-only vs Compile-time + Runtime**
@@ -147,3 +151,18 @@ impl Task<TaskFailed> {
 9. **Error Context Chains**: Consider error context chains that preserve the full history of errors through state transitions, not just the most recent.
 
 10. **Validation Macros**: Consider macros or derive attributes to automatically generate validation logic for common patterns (e.g., dependency checking).
+
+---
+
+## Implementation Status
+
+✅ **Fully Implemented** - All design decisions were implemented as described:
+
+- **Two-Layer Validation**: Compile-time (phantom types) + runtime (business rules)
+- **Distributed Validation**: Each transition method validates its own preconditions
+- **Error Types**: `TaskError` and `WorkflowError` with descriptive variants
+- **Error Preservation**: Error messages preserved during cancellation
+- **Result Types**: All transitions return `Result` for recoverable errors
+- **Parallel Validation**: Rayon used for parallel prerequisite checking
+
+The validation system has been thoroughly tested with 192 passing tests covering edge cases and error scenarios.

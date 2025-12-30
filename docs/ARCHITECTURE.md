@@ -176,7 +176,7 @@ Both convert to the same internal `Workflow` structure.
 - **Throughput**: 100,000+ workflows/second
 - **Scalability**: Linear up to 1M+ workflows
 
-See `OPTIMIZATION_PLAN.md` for detailed optimization strategy.
+See [OPTIMIZATION_PLAN.md](OPTIMIZATION_PLAN.md) for detailed optimization strategy.
 
 ## Testing Strategy
 

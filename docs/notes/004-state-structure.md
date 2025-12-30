@@ -1,5 +1,9 @@
 # Phase 3 - State Structure
 
+> **Status**: ✅ **Implemented** (Phase 3 - State Machine)  
+> **Implementation**: Immutable state structures in `src/core/task/` and `src/core/workflow/`  
+> **See**: [ROADMAP.md](../ROADMAP.md) for implementation status
+
 ## Alternatives Considered
 
 1. **Mutable In-place vs Immutable Transitions**
@@ -209,3 +213,17 @@ impl Workflow<WorkflowDraft> {
 
 10. **Snapshot Versioning**: Version snapshot format to enable migration and backward compatibility as the state structure evolves.
 
+---
+
+## Implementation Status
+
+✅ **Fully Implemented** - All design decisions were implemented as described:
+
+- **Immutable Transitions**: All state transitions return new instances
+- **TaskDefinition/TaskExecution**: Separated immutable definition from mutable execution state
+- **WorkflowSnapshot**: Full serializable state representation implemented
+- **Multiple Timestamps**: `created_at`, `started_at`, `completed_at` tracked
+- **State Enums**: `WorkflowState` and `TaskState` enums for serialization
+- **IndexMap**: Used for deterministic iteration order
+
+The state structure supports deterministic replication via Raft (Phase 4) and has been validated through comprehensive testing.

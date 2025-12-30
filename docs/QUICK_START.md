@@ -182,4 +182,4 @@ cargo bench --bench temporal_comparison
 - Read [API_GUIDE.md](API_GUIDE.md) for detailed API documentation
 - Read [SCOPE.md](SCOPE.md) for system guarantees
 - Read [DESIGN.md](DESIGN.md) for design rationale
-- Check [ROADMAP.md](../../ROADMAP.md) for implementation status
+- Check [ROADMAP.md](ROADMAP.md) for implementation status

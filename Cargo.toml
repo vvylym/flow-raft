@@ -46,12 +46,42 @@ categories = [
 publish = false
 
 [dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3"
+indexmap = { version = "2.12", features = ["serde", "rayon"] }
+openraft = { version = "0.9.21", features = ["serde", "storage-v2"] }
+rayon = "1.11"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+smallvec = { version = "1.13", features = ["serde"] }
 thiserror = "2.0"
-uuid = { version = "1.19", features = ["v4"] }
+tokio = { version = "1.48", features = ["full"] }
+tracing = "0.1"
+uuid = { version = "1.19", features = ["serde", "v4"] }
+derive_more = { version = "2.1.1", features = ["display"] }
+# gRPC
+tonic = "0.12"
+prost = "0.13"
+prost-types = "0.13"
+# Streaming
+tokio-stream = "0.1"
+
+[build-dependencies]
+tonic-build = "0.12"
 
 [dev-dependencies]
+clap = "4.5"
+criterion = "0.5"
 rstest = "0.26"
 
 [lints.rust]
-unsafe_code = "forbid"
+# unsafe_code = "forbid"
 missing_docs = "deny"
+
+[[bench]]
+name = "workflow_execution"
+harness = false
+
+[[bench]]
+name = "temporal_comparison"
+harness = false

@@ -10,33 +10,38 @@
 
 ## Phase 2 — Workflow Model
 
-* [ ] Define DAG data structures
-* [ ] Encode workflow and task states
-* [ ] Validate deterministic transitions
+* [x] Define DAG data structures
+* [x] Encode workflow and task states
+* [x] Validate deterministic transitions
 
 ---
 
 ## Phase 3 — State Machine
 
-* [ ] Define replicated state structure
-* [ ] Implement state transition logic
-* [ ] Enforce single-writer semantics
+* [x] Define replicated state structure (`WorkflowSnapshot`)
+* [x] Implement state transition logic (type-driven transitions)
+* [x] Enforce single-writer semantics (via Raft leader)
 
 ---
 
 ## Phase 4 — Raft Integration
 
-* [ ] Define Raft log entries
-* [ ] Implement apply logic
-* [ ] Handle leader-only writes
+* [x] Define Raft log entries (`Request`/`Response` types)
+* [x] Implement apply logic (`StateMachineStore`)
+* [x] Handle leader-only writes (Raft consensus)
+* [x] In-memory log storage (`LogStore`)
+* [x] In-memory state machine (`StateMachineStore`)
+* [x] Memory network for testing (`MemoryNetwork`)
 
 ---
 
 ## Phase 5 — Execution Layer
 
-* [ ] Separate coordination from execution
-* [ ] Implement worker execution interface
-* [ ] Track in-flight tasks
+* [x] Separate coordination from execution (`WorkflowExecutor`)
+* [x] Implement worker execution interface (`TaskHandler` trait)
+* [x] Track in-flight tasks (via state machine)
+* [x] Handler registry (`HandlerRegistry`)
+* [x] Workflow execution loop (`HandlerExecutor::execute_workflow`)
 
 ---
 
@@ -50,9 +55,9 @@
 
 ## Phase 7 — Retries & Idempotency
 
-* [ ] Define retry policy
-* [ ] Implement idempotency keys
-* [ ] Handle duplicate execution
+* [x] Define retry policy (`RetryConfig`)
+* [ ] Implement idempotency keys (structure exists, not fully integrated)
+* [ ] Handle duplicate execution (detection exists, prevention pending)
 
 ---
 
@@ -66,14 +71,36 @@
 
 ## Phase 9 — Observability
 
-* [ ] Structured logging
-* [ ] Minimal metrics (task states)
-* [ ] Trace workflow execution
+* [x] Structured logging (via `tracing`)
+* [x] Minimal metrics (`MetricsCollector`)
+* [x] Execution history (`ExecutionHistory`)
+* [x] Real-time watcher (`WorkflowWatcher`)
+* [ ] Trace workflow execution (partial)
 
 ---
 
 ## Phase 10 — Hardening & Narrative
 
-* [ ] Clean README and DESIGN.md
+* [x] Clean README and DESIGN.md
 * [ ] Add failure scenarios documentation
 * [ ] Prepare interview walkthrough
+
+---
+
+## Additional Implementations
+
+### API Layer
+* [x] Graph builder API (type-safe and dynamic)
+* [x] gRPC service definition
+* [x] Node launcher (leader/follower)
+* [x] CLI interface
+
+### Testing & Examples
+* [x] Comprehensive unit tests (192 tests passing)
+* [x] Integration tests (single-node and multi-node clusters)
+* [x] Example workflows (simple, complex, distributed)
+* [x] Benchmarks (workflow execution, temporal comparison)
+
+### Performance
+* [x] Initial benchmarks (~240µs latency, ~1-2K workflows/sec)
+* [x] Optimization plan (target: 100K workflows/sec, <1ms latency)

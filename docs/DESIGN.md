@@ -68,14 +68,28 @@ In systems where side effects matter, *exactly-once semantics are an illusion*. 
 
 ---
 
+## Implementation Status
+
+FlowRaft has been implemented with:
+
+* ✅ State-driven retries via `RetryConfig`
+* ✅ Idempotency key structure (workflow ID + task ID + attempt)
+* ✅ Effect acknowledgment via Raft consensus
+* ✅ Distributed execution with Raft replication
+* ✅ Type-driven state machines for compile-time safety
+
 ## Future Improvements
 
 * Pluggable retry strategies
 * Compensation workflows
 * Stronger execution fencing
+* Persistent storage (currently in-memory)
+* Real network RPC (currently memory-based for testing)
 
 ---
 
 ## Closing Note
 
 This design favors explicit guarantees and visible failure modes over optimistic execution. The complexity is intentional and localized.
+
+For current implementation details, see [ARCHITECTURE.md](ARCHITECTURE.md) and [API_GUIDE.md](API_GUIDE.md).

@@ -148,15 +148,28 @@ The focus is correctness, observability, and systems clarity.
 
 ## Current Status
 
-FlowRaft is under active development.
+FlowRaft has a complete MVP implementation:
 
-* [x] Workflow DAG model
+* [x] Workflow DAG model with type-safe state machines
 * [x] Deterministic state transitions
-* [ ] Raft-based state replication
-* [ ] Basic execution scheduling
+* [x] Raft-based state replication
+* [x] Workflow execution with task handlers
+* [x] Graph builder API (type-safe and dynamic)
+* [x] gRPC service definition
+* [x] Observability (metrics, history, watcher)
+* [x] Comprehensive tests (192 passing)
+* [x] Examples and benchmarks
 
+**Performance**: ~240µs latency, ~1-2K workflows/second (see `OPTIMIZATION_PLAN.md` for 100K/sec roadmap)
 
-Unimplemented aspects are explicit by design — this project favors correctness-first evolution over feature completeness.
+## Documentation
+
+- **[Quick Start](docs/QUICK_START.md)**: Get started in minutes
+- **[Architecture](docs/ARCHITECTURE.md)**: System design and components
+- **[API Guide](docs/API_GUIDE.md)**: Complete API reference
+- **[Scope](docs/SCOPE.md)**: System guarantees and non-goals
+- **[Design](docs/DESIGN.md)**: Design rationale and tradeoffs
+- **[Roadmap](ROADMAP.md)**: Implementation status and future work
 
 ---
 

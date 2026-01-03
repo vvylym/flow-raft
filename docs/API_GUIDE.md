@@ -1,71 +1,150 @@
 # FlowRaft API Guide
 
-## Overview
+## Core APIs
 
-FlowRaft provides multiple APIs for defining and executing workflows:
+### Graph Builder
 
-1. **Graph Builder API**: Type-safe and dynamic workflow definition
-2. **gRPC API**: Remote workflow management
-3. **Direct API**: Programmatic workflow creation and execution
-
-## Graph Builder API
-
-### Simplified Function-Based API
-
-The recommended approach is to use the simplified function-based API:
+Type-safe workflow definition:
 
 ```rust
-use flow_raft::prelude::*;
-
-// Define your functions
-fn task1(input: MyInput) -> Result<MyOutput, String> { ... }
-fn task2(input: MyOutput) -> Result<FinalResult, String> { ... }
-
-// Build workflow using functions
-let workflow_graph = GraphBuilder::new("my_workflow")
-    .add_node_fn("task1", wrap_function(task1), None)
-    .add_node_fn("task2", wrap_function(task2), None)
-    .add_edge("task1", "task2")
-    .set_root("task1")
-    .build()?;
-
-// Convert to workflow definition
-let workflow_def = WorkflowDef::from_graph("my_workflow", workflow_graph, RetryConfig::default());
-```
-
-### Type-Safe Builder (Alternative)
-
-You can also use the traditional handler-based approach:
-
-```rust
-use flow_raft::prelude::*;
-
-let workflow_graph = GraphBuilder::new("my_workflow")
+let graph = GraphBuilder::new("workflow")
     .add_node("task1", "handler1", vec![], vec![], None)
     .add_node("task2", "handler2", vec![], vec![], None)
     .add_simple_edge("task1", "task2")
     .set_root("task1")
     .build()?;
-
-let workflow_def = WorkflowDef::from_graph("my_workflow", workflow_graph, RetryConfig::default());
 ```
 
-### Dynamic Builder
+**Key Methods**:
+- `add_node(name, handler, inputs, outputs, timeout)`: Add task node
+- `add_simple_edge(from, to)`: Sequential dependency
+- `add_conditional_edge(from, condition, then, else)`: Conditional branching
+- `add_split_edge(from, split, branches)`: Parallel split
+- `add_merge_edge(branches, merge, to)`: Parallel merge
+- `set_root(name)`: Set entry point
+
+### FlowRaftApp
+
+Application layer for workflow management:
 
 ```rust
-use flow_raft::api::graph::DynamicGraphBuilder;
+let app = FlowRaftApp::builder()
+    .with_node_id(1)
+    .enable_metrics(true)
+    .build_single_node()
+    .await?;
 
-let mut builder = DynamicGraphBuilder::new("my_workflow");
-builder
-    .add_node("task1", "handler1", vec![], vec![], None)
-    .add_node("task2", "handler2", vec![], vec![], None)
-    .add_simple_edge("task1", "task2");
+// Register workflow
+let workflow_id = app.register_workflow(workflow_def).await?;
 
-let graph = builder.build()?;
-let workflow = dynamic_graph_to_workflow(graph, workflow_id, retry_config, inputs)?;
+// Get workflow state
+let workflow = app.get_workflow(&workflow_id).await;
+
+// Get all workflows
+let workflows = app.get_all_workflows().await;
 ```
 
-### Conditional Edges
+### WorkflowExecutor
+
+Execute workflows with task handlers:
+
+```rust
+let executor = WorkflowExecutor::new(raft, state_machine, node_id);
+
+// Execute single task
+executor.execute_task(workflow_id, task_id, &handler, inputs).await?;
+
+// Get ready tasks (dependencies satisfied)
+let ready = executor.get_ready_tasks(&workflow_id).await;
+```
+
+### HandlerRegistry
+
+Register and manage task handlers:
+
+```rust
+let registry = HandlerRegistry::new();
+registry.register_handler(
+    workflow_id,
+    "handler_name".to_string(),
+    Arc::new(MyHandler) as Arc<dyn TaskHandler>,
+).await;
+```
+
+### gRPC Client
+
+Remote workflow management:
+
+```rust
+let client = FlowRaftClient::builder()
+    .with_endpoint("http://localhost:50051")
+    .with_timeout(Duration::from_secs(30))
+    .build()?;
+
+// Submit workflow
+let exec_id = client.submit_workflow("workflow_name", json!({})).await?;
+
+// Get status
+let status = client.get_workflow_status(exec_id).await?;
+
+// Watch execution
+let mut stream = client.watch_workflow(exec_id).await?;
+while let Some(update) = stream.next().await {
+    // Handle update
+}
+
+// Control operations
+client.pause_workflow(exec_id).await?;
+client.resume_workflow(exec_id).await?;
+client.cancel_workflow(exec_id).await?;
+```
+
+## Error Handling
+
+All APIs return `Result<T, E>` where errors are:
+
+- **Raft errors**: Consensus failures, network issues
+- **State machine errors**: Invalid transitions, missing workflows
+- **Validation errors**: Invalid graph structure, missing dependencies
+- **Execution errors**: Handler failures, timeouts
+
+## Type System
+
+### WorkflowId / TaskId
+
+UUID-based identifiers with type safety:
+
+```rust
+let workflow_id = WorkflowId::default(); // or parse from string
+let task_id = TaskId::default();
+```
+
+### WorkflowState / TaskState
+
+Type-safe state machines:
+
+```rust
+match workflow.state {
+    WorkflowState::Draft => { /* ... */ }
+    WorkflowState::Running => { /* ... */ }
+    WorkflowState::Completed => { /* ... */ }
+    WorkflowState::Failed { error_message } => { /* ... */ }
+    // ...
+}
+```
+
+### RetryConfig
+
+Configurable retry behavior:
+
+```rust
+let retry = RetryConfig::new(3); // max 3 attempts
+let retry = RetryConfig::with_backoff(3, 2.0, 1000); // with exponential backoff
+```
+
+## Advanced Patterns
+
+### Conditional Execution
 
 ```rust
 builder.add_conditional_edge(
@@ -76,213 +155,58 @@ builder.add_conditional_edge(
 );
 ```
 
-### Split/Merge Edges
+### Parallel Execution
 
 ```rust
 builder.add_split_edge(
     "start",
     Arc::new(MySplit) as Arc<dyn SplitObject>,
-    vec!["branch1", "branch2"],
+    vec!["branch1", "branch2", "branch3"],
 );
 
 builder.add_merge_edge(
-    vec!["branch1", "branch2"],
+    vec!["branch1", "branch2", "branch3"],
     Arc::new(MyMerge) as Arc<dyn MergeObject>,
     "merge_task",
 );
 ```
 
-## Builder Pattern API
-
-### Creating a Single-Node App
+### Dynamic Workflows
 
 ```rust
-use flow_raft::prelude::*;
+use flow_raft_api::graph::DynamicGraphBuilder;
 
-let app = FlowRaftApp::builder()
-    .with_node_id(1)
-    .with_workflows(vec![workflow_def])
-    .enable_metrics(true)
-    .build_single_node()
-    .await?;
+let mut builder = DynamicGraphBuilder::new("dynamic");
+// Build graph dynamically...
+let graph = builder.build()?;
+let workflow = dynamic_graph_to_workflow(graph, workflow_id, retry_config, inputs)?;
 ```
 
-### Creating a Cluster
-
-```rust
-use flow_raft::prelude::*;
-
-let nodes = launch_cluster(vec![
-    (1, NodeMode::Leader, vec![workflow1_def]),
-    (2, NodeMode::Follower, vec![workflow2_def]),
-    (3, NodeMode::Follower, vec![]),
-])
-.await?;
-```
-
-## Direct API (Advanced)
-
-### Creating a Workflow Manually
-
-```rust
-use flow_raft::prelude::*;
-
-let app = FlowRaftApp::new(raft, state_machine);
-let snapshot = WorkflowSnapshot::from_workflow(&running_workflow);
-let request = Request::CreateWorkflow { workflow: snapshot };
-let response = app.create_workflow(request).await?;
-```
-
-### Registering Workflows
-
-```rust
-// Using the builder pattern (recommended)
-let app = FlowRaftApp::builder()
-    .with_node_id(1)
-    .with_workflows(vec![workflow_def])
-    .build_single_node()
-    .await?;
-
-// Or register after creation
-app.register_workflow(workflow_def).await?;
-```
-
-### Executing a Workflow
-
-```rust
-use flow_raft::api::handlers::executor::HandlerExecutor;
-
-let handler_executor = HandlerExecutor::new(executor, registry);
-
-// Register handlers
-registry.register_handler(workflow_id, "handler1", handler1).await;
-registry.register_handler(workflow_id, "handler2", handler2).await;
-
-// Execute workflow
-handler_executor.execute_workflow(workflow_id, max_iterations).await?;
-```
-
-### Task Handler Implementation
-
-```rust
-use flow_raft::raft::executor::TaskHandler;
-
-struct MyTaskHandler;
-
-impl TaskHandler for MyTaskHandler {
-    fn execute(
-        &self,
-        task_id: TaskId,
-        inputs: serde_json::Value,
-    ) -> Result<serde_json::Value, String> {
-        // Execute task logic
-        Ok(serde_json::json!({"result": "success"}))
-    }
-}
-```
-
-## gRPC API
-
-### Service Definition
-
-See `src/api/grpc/proto/flowraft.proto` for full service definition.
-
-### Key Methods
-
-- `CreateWorkflow`: Create a new workflow
-- `GetWorkflow`: Get workflow status
-- `ListWorkflows`: List all workflows
-- `StartWorkflow`: Start workflow execution
-- `CancelWorkflow`: Cancel a running workflow
-
-### Example Usage
-
-```rust
-// gRPC client usage (pseudo-code)
-let mut client = FlowRaftClient::connect("http://localhost:50051").await?;
-
-let request = CreateWorkflowRequest {
-    definition: workflow_json,
-    inputs: inputs_json,
-};
-
-let response = client.create_workflow(request).await?;
-```
-
-## Observability API
+## Observability
 
 ### Metrics
 
-```rust
-use flow_raft::api::observability::metrics::MetricsCollector;
-
-let metrics = MetricsCollector::new();
-metrics.record_workflow_start(workflow_id).await;
-metrics.record_task_execution(task_id, duration).await;
-```
+Prometheus metrics exposed at `/metrics`:
+- `flowraft_workflows_registered_total`
+- `flowraft_tasks_executed_total`
+- `flowraft_raft_replication_duration_seconds`
+- `flowraft_task_execution_duration_seconds`
 
 ### History
 
-```rust
-use flow_raft::api::observability::history::ExecutionHistory;
+Execution history via `HistoryStore`:
 
-let history = ExecutionHistory::new();
-history.record_event(workflow_id, event).await;
-let events = history.get_history(workflow_id, limit).await;
+```rust
+let history = history_store.get_history(&workflow_id, None).await;
 ```
 
-### Watcher
+### Event Streaming
+
+Watch workflow updates:
 
 ```rust
-use flow_raft::api::observability::watcher::WorkflowWatcher;
-
-let watcher = WorkflowWatcher::new();
-let mut receiver = watcher.watch_workflow(workflow_id).await;
-
-while let Ok(update) = receiver.recv().await {
-    println!("Workflow update: {:?}", update);
+let mut stream = watcher.watch_workflow(workflow_id).await?;
+while let Some(update) = stream.next().await {
+    // Handle update
 }
 ```
-
-## Node Management
-
-### Launching a Leader Node
-
-```rust
-use flow_raft::api::node::launcher::launch_leader;
-
-let config = NodeConfig {
-    node_id: 1,
-    raft_config: default_config(),
-    // ...
-};
-
-let node = launch_leader(config, network).await?;
-```
-
-### Launching a Follower Node
-
-```rust
-use flow_raft::api::node::launcher::launch_follower;
-
-let cluster_nodes = vec![1, 2, 3];
-let node = launch_follower(config, network, cluster_nodes).await?;
-```
-
-## Error Handling
-
-All APIs return `Result` types with specific error variants:
-
-- `HandlerExecutionError`: Handler-related errors
-- `RaftError`: Raft consensus errors
-- `WorkflowError`: Workflow state errors
-- `TaskError`: Task execution errors
-
-## Best Practices
-
-1. **Always register handlers before executing workflows**
-2. **Use type-safe builder for compile-time workflows**
-3. **Use dynamic builder for runtime-defined workflows**
-4. **Handle errors appropriately (retry, log, etc.)**
-5. **Monitor workflows using observability APIs**
-6. **Use watchers for real-time updates**

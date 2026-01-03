@@ -9,7 +9,6 @@ use opentelemetry::global;
 use opentelemetry::trace::TraceError;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::Resource;
-use tracing_subscriber::util::SubscriberInitExt;
 
 /// Tracing exporter type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

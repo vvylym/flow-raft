@@ -154,3 +154,20 @@ Violating an invariant is a **bug**, not an edge case.
 > "Every new feature must either preserve or strengthen an existing guarantee. If it weakens a guarantee, it does not belong in the MVP."
 
 This principle should guide all future implementation decisions.
+
+---
+
+## Implementation Status
+
+The MVP has been completed with all core guarantees implemented:
+
+* ✅ **S1 — Workflow Model**: DAG-based workflows with explicit states
+* ✅ **S2 — Replicated State Machine**: Raft-based state replication
+* ✅ **S3 — Execution Separation**: Coordination separated from execution
+* ✅ **S4 — Failure Recovery**: Leader/worker crash recovery via Raft
+* ✅ **S5 — Observability**: Metrics, history, and real-time watchers
+
+For detailed implementation information, see:
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture
+- [API_GUIDE.md](API_GUIDE.md) - API documentation
+- [ROADMAP.md](ROADMAP.md) - Implementation status

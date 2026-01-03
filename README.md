@@ -1,184 +1,108 @@
 # FlowRaft
 
-**A distributed, stateful workflow engine written in Rust**, designed for correctness, fault tolerance, and predictable execution under failure.
-
----
-
-## Why FlowRaft Exists
-
-Most workflow engines are optimized for *feature velocity* or *developer ergonomics*. FlowRaft is intentionally optimized for a different set of constraints:
-
-* **Deterministic execution** in the presence of failures
-* **Explicit state ownership** and recovery semantics
-* **Clear consistency guarantees** across nodes
-* **Predictable behavior under concurrency**
-
-FlowRaft is an exploration of how far these guarantees can be pushed in a modern Rust-based distributed system without relying on external orchestration platforms. It is a deliberate systems design exercise intended to mirror real-world tradeoffs encountered in production distributed backends.
-
-> “The system guarantees and non-goals are explicitly defined in `docs/SCOPE.md`.”
-
----
-
-## Problem Statement
-
-In distributed environments, executing multi-step workflows reliably is hard:
-
-* Nodes fail mid-execution
-* Network partitions introduce ambiguity
-* Retrying tasks can cause duplication or corruption
-* Parallel execution complicates state tracking
-
-Most systems address this by either:
-
-* pushing complexity into operators, or
-* accepting weak consistency guarantees
-
-FlowRaft instead treats workflows as **first-class, replicated state machines**.
-
----
-
-## Core Design Principles
-
-### 1. Workflows as Stateful DAGs
-
-Workflows are modeled as **directed acyclic graphs (DAGs)** where each node represents a task and edges encode execution dependencies.
-
-* Supports **sequential**, **parallel**, and **conditional** execution paths
-* Execution state is explicit and persisted
-* Task transitions are deterministic given the same inputs
-
-This model enables recovery and replay without relying on best-effort heuristics.
-
----
-
-### 2. Replicated State via Raft
-
-FlowRaft uses the **Raft consensus algorithm** to replicate workflow state across nodes.
-
-Why Raft:
-
-* Simpler mental model than Paxos
-* Strong leader-based consistency
-* Well-understood failure modes
-
-All workflow state transitions are:
-
-* proposed to the leader
-* replicated via the Raft log
-* applied deterministically on all followers
-
-This ensures:
-
-* a single source of truth
-* no split-brain execution
-* consistent recovery after node failures
-
----
-
-### 3. Separation of Coordination and Execution
-
-FlowRaft explicitly separates:
-
-* **coordination** (consensus, state replication)
-* **execution** (running user-defined tasks)
-
-Only *state transitions* go through consensus. Task execution itself may happen locally and in parallel, but its **effects are only committed once agreed upon**.
-
-This avoids:
-
-* unnecessary consensus overhead
-* tightly coupling compute with coordination
-
----
-
-### 4. Controlled Concurrency in Rust
-
-Concurrency is handled deliberately, not opportunistically:
-
-* **Tokio** for async I/O and task scheduling
-* **Rayon** for CPU-bound parallelism
-* Clear boundaries between async and parallel sections
-
-Rust’s ownership model is used to:
-
-* enforce correct state access
-* avoid shared mutable state across tasks
-* surface race conditions at compile time
-
-The goal is predictable throughput, not maximal parallelism.
-
----
-
-## Failure Handling & Recovery
-
-Failure is treated as a *normal operating condition*.
-
-FlowRaft is designed to handle:
-
-* **Leader failure:** new leader elected via Raft, execution resumes from replicated state
-* **Worker failure:** incomplete tasks are detected and rescheduled
-* **Process restarts:** workflow state is reconstructed from the Raft log
-
-There is no reliance on in-memory-only progress tracking. If state is not replicated, it is assumed lost.
-
----
-
-## Execution Model
-
-1. Workflow is submitted to the cluster
-2. Leader validates and persists initial state
-3. Eligible tasks are scheduled for execution
-4. Task completion proposes a state transition
-5. Transition is replicated and committed
-6. Downstream tasks become eligible
-
-At any point, cluster membership or leadership may change without corrupting workflow state.
-
----
-
-## What FlowRaft Is *Not*
-
-* Not a general-purpose orchestration replacement
-* Not optimized for arbitrary long-running jobs
-* Not focused on UI or DSL expressiveness
-
-The focus is correctness, observability, and systems clarity.
-
----
-
-## Current Status
-
-FlowRaft is under active development.
-
-Implemented:
-
-* Workflow DAG model
-* Raft-based state replication
-* Basic execution scheduling
-* Deterministic state transitions
-
-In progress:
-
-* Persistence backends
-* Backpressure and rate limiting
-* Execution retries and idempotency strategies
-* Observability (metrics, tracing)
-
-Unimplemented aspects are explicit by design — this project favors correctness-first evolution over feature completeness.
-
----
-
-## Why This Project Matters
-
-FlowRaft exists to demonstrate:
-
-* end-to-end distributed systems design
-* disciplined use of Rust for concurrency and safety
-* clear reasoning about failure modes and tradeoffs
-
-It reflects how I approach production systems: define guarantees first, then build mechanisms that uphold them.
-
----
+**A distributed, stateful workflow engine in Rust** with Raft-based consensus for deterministic execution and fault tolerance.
+
+## Overview
+
+FlowRaft provides a production-ready workflow engine that treats workflows as replicated state machines. All state transitions are coordinated through Raft consensus, ensuring strong consistency guarantees even under node failures.
+
+### Key Features
+
+- **Type-safe workflow definition** via compile-time validated DAGs
+- **Raft-based state replication** for strong consistency
+- **Deterministic state transitions** with explicit recovery semantics
+- **gRPC API** for distributed workflow management
+- **Comprehensive observability** (metrics, history, event streaming)
+- **Production-ready** with 192+ passing tests and extensive benchmarks
+
+## Architecture
+
+```
+┌─────────────────────────────────────────┐
+│         API Layer (gRPC/Graph)          │
+├─────────────────────────────────────────┤
+│    Raft Layer (Consensus & Replication) │
+├─────────────────────────────────────────┤
+│  Core Layer (Workflow/Task State Machines)│
+└─────────────────────────────────────────┘
+```
+
+**Core Principle**: Only state transitions go through consensus. Task execution happens locally, with effects committed via Raft.
+
+## Quick Start
+
+```rust
+use flow_raft::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Build workflow
+    let graph = GraphBuilder::new("example")
+        .add_node("task1", "handler1", vec![], vec![], None)
+        .add_node("task2", "handler2", vec![], vec![], None)
+        .add_simple_edge("task1", "task2")
+        .set_root("task1")
+        .build()?;
+
+    let workflow_def = WorkflowDef::from_graph("example", graph, RetryConfig::default());
+
+    // Create single-node app
+    let app = FlowRaftApp::builder()
+        .with_node_id(1)
+        .build_single_node()
+        .await?;
+
+    // Register and execute
+    let workflow_id = app.register_workflow(workflow_def).await?;
+    // ... execute workflow
+    Ok(())
+}
+```
+
+## Performance
+
+**Current MVP Performance** (measured on modern hardware):
+- **Workflow registration**: ~500-1000 workflows/sec
+- **Task execution**: ~37µs per task (27K tasks/sec)
+- **Large workflows** (100 tasks): ~3.3ms registration
+- **Parallel workflows**: ~736µs registration
+
+See [PERFORMANCE.md](docs/PERFORMANCE.md) for detailed benchmarks and optimization roadmap.
+
+## Documentation
+
+- **[Quick Start](docs/QUICK_START.md)**: Get running in minutes
+- **[Architecture](docs/ARCHITECTURE.md)**: System design and components
+- **[API Guide](docs/API_GUIDE.md)**: Complete API reference
+- **[Cluster Operations](docs/CLUSTER_OPERATIONS.md)**: Multi-node deployment
+- **[Performance](docs/PERFORMANCE.md)**: Benchmarks and optimization
+
+## Crate Structure
+
+- `flow-raft-core`: Core workflow/task state machines and DAG utilities
+- `flow-raft-raft`: Raft consensus layer and state replication
+- `flow-raft-api`: Graph builder, gRPC client, and workflow definitions
+- `flow-raft-server`: gRPC service implementation and cluster management
+- `flow-raft-observability`: Metrics, history, and event streaming
+
+## Design Principles
+
+1. **Workflows as State Machines**: Explicit state with deterministic transitions
+2. **Raft for Consistency**: All state changes replicated via consensus
+3. **Separation of Concerns**: Coordination (Raft) vs execution (handlers)
+4. **Type Safety**: Compile-time validation of workflow structure
+5. **Observability First**: Built-in metrics, history, and event streaming
+
+## Status
+
+**MVP Complete** ✅
+- [x] Core workflow engine with state machines
+- [x] Raft-based state replication
+- [x] Graph builder API (type-safe & dynamic)
+- [x] gRPC service and client
+- [x] Observability (metrics, history, watcher)
+- [x] Comprehensive test suite (192+ tests)
+- [x] Production examples and benchmarks
 
 ## License
 

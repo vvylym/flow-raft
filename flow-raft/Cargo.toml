@@ -1,0 +1,103 @@
+[package]
+name = "flow-raft"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+readme = "README.md"
+publish = false
+
+[dependencies]
+flow-raft-core = { path = "../flow-raft-core" }
+flow-raft-raft = { path = "../flow-raft-raft" }
+flow-raft-api = { path = "../flow-raft-api" }
+flow-raft-observability = { path = "../flow-raft-observability" }
+flow-raft-server = { path = "../flow-raft-server" }
+uuid = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json.workspace = true
+chrono.workspace = true
+futures.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+openraft = { workspace = true }
+
+[[example]]
+name = "complex_workflow"
+path = "examples/complex_workflow.rs"
+
+[[example]]
+name = "simple_single_node"
+path = "examples/simple_single_node.rs"
+
+[[example]]
+name = "distributed_cluster"
+path = "examples/distributed_cluster.rs"
+
+[[example]]
+name = "conditional_workflow"
+path = "examples/conditional_workflow.rs"
+
+[[example]]
+name = "parallel_workflow"
+path = "examples/parallel_workflow.rs"
+
+[[example]]
+name = "production_cluster"
+path = "examples/production_cluster.rs"
+
+[[example]]
+name = "cluster_resilience"
+path = "examples/cluster_resilience.rs"
+
+[[example]]
+name = "advanced_error_handling"
+path = "examples/advanced_error_handling.rs"
+
+[[example]]
+name = "advanced_parallelism"
+path = "examples/advanced_parallelism.rs"
+
+[[example]]
+name = "advanced_conditionals"
+path = "examples/advanced_conditionals.rs"
+
+[[example]]
+name = "advanced_observability"
+path = "examples/advanced_observability.rs"
+
+[[example]]
+name = "advanced_client"
+path = "examples/advanced_client.rs"
+
+[[example]]
+name = "advanced_cluster"
+path = "examples/advanced_cluster.rs"
+
+[[bench]]
+name = "flow_raft_benchmarks"
+path = "../benches/flow_raft_benchmarks.rs"
+harness = false
+
+[[bench]]
+name = "temporal_comparison"
+path = "../benches/temporal_comparison.rs"
+harness = false
+
+[[bench]]
+name = "airflow_comparison"
+path = "../benches/airflow_comparison.rs"
+harness = false
+
+[[bench]]
+name = "workflow_execution"
+path = "../benches/workflow_execution.rs"
+harness = false
+
+[dev-dependencies]
+criterion = "0.5"
+
+[lints]
+workspace = true

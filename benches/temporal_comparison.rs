@@ -1,88 +1,45 @@
-//! Comparison benchmarks with Temporal
+//! FlowRaft Workflow Benchmarks
 //!
-//! Note: This is a placeholder for comparison benchmarks.
-//! In a real implementation, you would need to set up Temporal
-//! and run equivalent workflows to compare performance.
+//! Benchmarks for FlowRaft workflow execution performance.
+//! These benchmarks measure FlowRaft's own performance characteristics.
 
 #![allow(missing_docs)]
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use flow_raft::api::graph::GraphBuilder;
-use flow_raft::api::graph::converter::graph_to_workflow;
-use flow_raft::core::{RetryConfig, WorkflowId};
-use flow_raft::raft::config::default_config;
-use flow_raft::raft::executor::{TaskHandler, WorkflowExecutor};
-use flow_raft::raft::network::MemoryNetworkFactory;
-use flow_raft::raft::storage::{LogStore, StateMachineStore};
-use flow_raft::raft::app::FlowRaftApp;
-use std::sync::Arc;
-use std::collections::BTreeSet;
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use flow_raft::prelude::*;
 use std::time::Instant;
-
-struct SimpleTaskHandler;
-
-impl TaskHandler for SimpleTaskHandler {
-    fn execute(
-        &self,
-        _task_id: flow_raft::core::TaskId,
-        _inputs: serde_json::Value,
-    ) -> Result<serde_json::Value, String> {
-        // Simulate minimal work
-        Ok(serde_json::json!({"result": "success"}))
-    }
-}
 
 async fn benchmark_flowraft_simple_workflow() -> u64 {
     let start = Instant::now();
-    
-    // Setup
-    let node_id = 1;
-    let config = Arc::new(default_config().validate().unwrap());
-    let network = MemoryNetworkFactory::new();
-    let log_store = LogStore::default();
-    let state_machine = StateMachineStore::default();
 
-    let raft = openraft::Raft::new(node_id, config, network, log_store, state_machine.clone())
-        .await
-        .unwrap();
-    let raft = Arc::new(raft);
-
-    raft.initialize([1u64].into_iter().collect::<BTreeSet<_>>())
+    // Setup using builder pattern (metrics disabled for benchmarks)
+    let app = FlowRaftApp::builder()
+        .with_node_id(1)
+        .enable_metrics(false)
+        .build_single_node()
         .await
         .unwrap();
 
-    let app = Arc::new(FlowRaftApp::new(raft.clone(), state_machine.clone()));
-    
-    // Create workflow
-    let mut builder = GraphBuilder::new("simple");
-    builder
+    // Create workflow using simplified API
+    let workflow_graph = GraphBuilder::new("simple")
         .add_node("task1", "handler1", vec![], vec![], None)
         .add_node("task2", "handler2", vec![], vec![], None)
         .add_node("task3", "handler3", vec![], vec![], None)
         .add_simple_edge("task1", "task2")
         .add_simple_edge("task2", "task3")
-        .set_root("task1");
+        .set_root("task1")
+        .build()
+        .unwrap();
 
-    let graph = builder.build().unwrap();
-    let workflow_id = WorkflowId::default();
-    let retry_config = RetryConfig::default();
-    let workflow = graph_to_workflow(graph, workflow_id, retry_config, serde_json::json!({})).unwrap();
-    let scheduled = workflow.schedule().unwrap();
-    let running = scheduled.start().unwrap();
-    
-    // Store workflow
-    let snapshot = flow_raft::core::WorkflowSnapshot::from_workflow(&running);
-    let request = flow_raft::raft::types::Request::CreateWorkflow {
-        workflow: snapshot,
-    };
-    app.create_workflow(request).await.unwrap();
-    
+    let workflow_def = WorkflowDef::from_graph("simple", workflow_graph, RetryConfig::default());
+    let _ = app.register_workflow(workflow_def).await.unwrap();
+
     start.elapsed().as_micros() as u64
 }
 
 fn benchmark_flowraft_latency(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    
+
     c.bench_function("flowraft_simple_workflow_latency", |b| {
         b.iter(|| {
             rt.block_on(async {
@@ -95,7 +52,7 @@ fn benchmark_flowraft_latency(c: &mut Criterion) {
 
 fn benchmark_flowraft_throughput(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    
+
     c.bench_function("flowraft_workflow_throughput", |b| {
         b.iter(|| {
             rt.block_on(async {
@@ -108,15 +65,78 @@ fn benchmark_flowraft_throughput(c: &mut Criterion) {
     });
 }
 
-// Note: Temporal comparison benchmarks would require:
-// 1. Temporal server setup
-// 2. Temporal client SDK
-// 3. Equivalent workflow definitions
-// This is a placeholder structure
+// Additional benchmarks for comprehensive performance evaluation
+
+fn benchmark_flowraft_conditional_workflow(c: &mut Criterion) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+
+    c.bench_function("flowraft_conditional_workflow", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                let start = Instant::now();
+                let app = FlowRaftApp::builder()
+                    .with_node_id(1)
+                    .enable_metrics(false)
+                    .build_single_node()
+                    .await
+                    .unwrap();
+
+                // Create workflow with conditional branches
+                let mut builder = GraphBuilder::new("conditional");
+                builder
+                    .add_node("task1", "handler1", vec![], vec![], None)
+                    .add_node("task2", "handler2", vec![], vec![], None)
+                    .add_node("task3", "handler3", vec![], vec![], None)
+                    .add_simple_edge("task1", "task2")
+                    .add_simple_edge("task1", "task3")
+                    .set_root("task1");
+                let workflow_graph = builder.build().unwrap();
+
+                let workflow_def =
+                    WorkflowDef::from_graph("conditional", workflow_graph, RetryConfig::default());
+                let _ = app.register_workflow(workflow_def).await;
+                black_box(start.elapsed().as_micros() as u64)
+            })
+        })
+    });
+}
+
+fn benchmark_flowraft_workflow_with_retries(c: &mut Criterion) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+
+    c.bench_function("flowraft_workflow_with_retries", |b| {
+        b.iter(|| {
+            rt.block_on(async {
+                let start = Instant::now();
+                let app = FlowRaftApp::builder()
+                    .with_node_id(1)
+                    .enable_metrics(false)
+                    .build_single_node()
+                    .await
+                    .unwrap();
+
+                // Create workflow with retry configuration
+                let retry_config = RetryConfig::with_backoff(3, 2.0, 100);
+
+                let mut builder = GraphBuilder::new("retry");
+                builder
+                    .add_node("task1", "handler1", vec![], vec![], None)
+                    .set_root("task1");
+                let workflow_graph = builder.build().unwrap();
+
+                let workflow_def = WorkflowDef::from_graph("retry", workflow_graph, retry_config);
+                let _ = app.register_workflow(workflow_def).await;
+                black_box(start.elapsed().as_micros() as u64)
+            })
+        })
+    });
+}
 
 criterion_group!(
     benches,
     benchmark_flowraft_latency,
-    benchmark_flowraft_throughput
+    benchmark_flowraft_throughput,
+    benchmark_flowraft_conditional_workflow,
+    benchmark_flowraft_workflow_with_retries
 );
 criterion_main!(benches);

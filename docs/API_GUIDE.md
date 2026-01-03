@@ -10,20 +10,44 @@ FlowRaft provides multiple APIs for defining and executing workflows:
 
 ## Graph Builder API
 
-### Type-Safe Builder
+### Simplified Function-Based API
+
+The recommended approach is to use the simplified function-based API:
 
 ```rust
-use flow_raft::api::graph::GraphBuilder;
+use flow_raft::prelude::*;
 
-let mut builder = GraphBuilder::new("my_workflow");
-builder
+// Define your functions
+fn task1(input: MyInput) -> Result<MyOutput, String> { ... }
+fn task2(input: MyOutput) -> Result<FinalResult, String> { ... }
+
+// Build workflow using functions
+let workflow_graph = GraphBuilder::new("my_workflow")
+    .add_node_fn("task1", wrap_function(task1), None)
+    .add_node_fn("task2", wrap_function(task2), None)
+    .add_edge("task1", "task2")
+    .set_root("task1")
+    .build()?;
+
+// Convert to workflow definition
+let workflow_def = WorkflowDef::from_graph("my_workflow", workflow_graph, RetryConfig::default());
+```
+
+### Type-Safe Builder (Alternative)
+
+You can also use the traditional handler-based approach:
+
+```rust
+use flow_raft::prelude::*;
+
+let workflow_graph = GraphBuilder::new("my_workflow")
     .add_node("task1", "handler1", vec![], vec![], None)
     .add_node("task2", "handler2", vec![], vec![], None)
     .add_simple_edge("task1", "task2")
-    .set_root("task1");
+    .set_root("task1")
+    .build()?;
 
-let graph = builder.build()?;
-let workflow = graph_to_workflow(graph, workflow_id, retry_config, inputs)?;
+let workflow_def = WorkflowDef::from_graph("my_workflow", workflow_graph, RetryConfig::default());
 ```
 
 ### Dynamic Builder
@@ -68,18 +92,59 @@ builder.add_merge_edge(
 );
 ```
 
-## Direct API
+## Builder Pattern API
 
-### Creating a Workflow
+### Creating a Single-Node App
 
 ```rust
-use flow_raft::raft::app::FlowRaftApp;
-use flow_raft::raft::types::Request;
+use flow_raft::prelude::*;
+
+let app = FlowRaftApp::builder()
+    .with_node_id(1)
+    .with_workflows(vec![workflow_def])
+    .enable_metrics(true)
+    .build_single_node()
+    .await?;
+```
+
+### Creating a Cluster
+
+```rust
+use flow_raft::prelude::*;
+
+let nodes = launch_cluster(vec![
+    (1, NodeMode::Leader, vec![workflow1_def]),
+    (2, NodeMode::Follower, vec![workflow2_def]),
+    (3, NodeMode::Follower, vec![]),
+])
+.await?;
+```
+
+## Direct API (Advanced)
+
+### Creating a Workflow Manually
+
+```rust
+use flow_raft::prelude::*;
 
 let app = FlowRaftApp::new(raft, state_machine);
 let snapshot = WorkflowSnapshot::from_workflow(&running_workflow);
 let request = Request::CreateWorkflow { workflow: snapshot };
 let response = app.create_workflow(request).await?;
+```
+
+### Registering Workflows
+
+```rust
+// Using the builder pattern (recommended)
+let app = FlowRaftApp::builder()
+    .with_node_id(1)
+    .with_workflows(vec![workflow_def])
+    .build_single_node()
+    .await?;
+
+// Or register after creation
+app.register_workflow(workflow_def).await?;
 ```
 
 ### Executing a Workflow

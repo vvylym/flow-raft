@@ -1,87 +1,80 @@
-[package]
-name = "flow-raft"
-version = "0.1.0"
-description = "A distributed, stateful workflow engine optimized for correctness, fault tolerance, and deterministic execution."
-authors = ["Guillaume Mpouli <235853469+vvylym@users.noreply.github.com>"]
-edition = "2024"
-rust-version = "1.91.1"
-license = "MIT"
-readme = "README.md"
-homepage = "https://github.com/vvylym/flow-raft"
-repository = "https://github.com/vvylym/flow-raft"
-documentation = "https://github.com/vvylym/flow-raft"
-keywords = [
-    "workflow",
-    "orchestration",
-    "dag",
-    "distributed",
-    "state-machine",
-    "deterministic",
-    "fault-tolerant",
-    "consensus",
-    "raft",
-    "replicated",
-    "stateful",
-    "reliable",
-    "fault-tolerance",
-    "recovery",
-    "coordination",
-    "scheduler",
-    "orchestrator",
-    "task-runner",
-    "workflow-engine",
-    "distributed-systems",
-    "backpressure",
+[workspace]
+members = [
+    "flow-raft",
+    "flow-raft-core",
+    "flow-raft-raft",
+    "flow-raft-api",
+    "flow-raft-observability",
+    "flow-raft-proto",
+    "flow-raft-server",
 ]
-categories = [
-    "concurrency",
-    "distributed",
-    "asynchronous",
-    "systems",
-    "data-structures",
-    "algorithms",
-    "web-programming",
-    "network-programming",
-]
-publish = false
+resolver = "2"
 
-[dependencies]
-chrono = { version = "0.4", features = ["serde"] }
-futures = "0.3"
-indexmap = { version = "2.12", features = ["serde", "rayon"] }
-openraft = { version = "0.9.21", features = ["serde", "storage-v2"] }
-rayon = "1.11"
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92.0"
+authors = ["Guillaume Mpouli <235853469+vvylym@users.noreply.github.com>"]
+license = "MIT"
+repository = "https://github.com/vvylym/flow-raft"
+description = "A distributed, stateful workflow engine optimized for correctness, fault tolerance, and deterministic execution."
+
+[workspace.dependencies]
+# Core dependencies
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-smallvec = { version = "1.13", features = ["serde"] }
-thiserror = "2.0"
-tokio = { version = "1.48", features = ["full"] }
-tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.19", features = ["serde", "v4"] }
-derive_more = { version = "2.1.1", features = ["display"] }
-# gRPC
-tonic = "0.12"
-prost = "0.13"
-prost-types = "0.13"
-# Streaming
+thiserror = "2.0"
+indexmap = { version = "2.12", features = ["serde", "rayon"] }
+smallvec = { version = "1.13", features = ["serde"] }
+
+# Raft
+openraft = { version = "0.9.21", features = ["serde", "storage-v2"] }
+
+# Async
+tokio = { version = "1.48", features = ["full"] }
+futures = "0.3"
 tokio-stream = "0.1"
 
-[build-dependencies]
-tonic-build = "0.12"
+# Observability (latest versions)
+metrics = "0.24"
+metrics-exporter-prometheus = "0.18"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+opentelemetry = { version = "0.24", features = ["trace", "metrics"] }
+opentelemetry_sdk = { version = "0.24", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.17", features = ["trace", "tonic"] }
+tracing-opentelemetry = "0.25"
 
-[dev-dependencies]
-clap = "4.5"
-criterion = "0.5"
-rstest = "0.26"
+# gRPC
+tonic = "0.14"
+tonic-prost = "0.14"
+prost = "0.14"
+prost-types = "0.14"
 
-[lints.rust]
-# unsafe_code = "forbid"
+# Utilities
+derive_more = { version = "2.1.1", features = ["display"] }
+rayon = "1.11"
+http-body-util = "0.1"
+bytes = "1.7"
+
+# Build dependencies
+tonic-prost-build = "0.14"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Dev dependencies are defined in individual crate Cargo.toml files
+# This section is kept for reference but not used by workspace resolver
+# [workspace.dev-dependencies]
+# criterion = "0.5"
+# rstest = "0.26"
+# pprof = "0.13"
+# inferno = "0.13"
+
+[workspace.lints.rust]
 missing_docs = "deny"
 
-[[bench]]
-name = "workflow_execution"
-harness = false
-
-[[bench]]
-name = "temporal_comparison"
-harness = false
+# Benchmarks are defined at the workspace root level
+# They are in the benches/ directory

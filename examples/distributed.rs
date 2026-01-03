@@ -1,20 +1,9 @@
 //! Distributed execution example
 //!
 //! Demonstrates multi-node cluster setup with leader/follower coordination
-//! and task execution on any node.
+//! and task execution on any node using the simplified API.
 
-use flow_raft::api::node::{launch_follower, launch_leader, NodeConfig, NodeMode};
-use flow_raft::api::handlers::{HandlerExecutor, HandlerRegistry};
-use flow_raft::core::{RetryConfig, TaskId, WorkflowId};
-use flow_raft::raft::app::FlowRaftApp;
-use flow_raft::raft::config::default_config;
-use flow_raft::raft::executor::{TaskHandler, WorkflowExecutor};
-use flow_raft::raft::network::MemoryNetworkFactory;
-use flow_raft::raft::storage::{LogStore, StateMachineStore};
-use flow_raft::raft::types::{NodeId, Request};
-use flow_raft::api::graph::{GraphBuilder, NodeName};
-use flow_raft::api::graph::converter::graph_to_workflow;
-use std::collections::BTreeSet;
+use flow_raft::prelude::*;
 use std::sync::Arc;
 
 struct DistributedTaskHandler {
@@ -44,68 +33,42 @@ impl TaskHandler for DistributedTaskHandler {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Distributed Execution Example");
 
-    // Create shared network for all nodes
-    let network = MemoryNetworkFactory::new();
-
-    // Launch leader node
-    println!("\n1. Launching leader node...");
-    let leader_config = NodeConfig::new(1, NodeMode::Leader);
-    let leader = launch_leader(leader_config, network.clone()).await?;
-    println!("   Leader node {} launched", leader.node_id);
-
-    // Launch follower nodes
-    println!("\n2. Launching follower nodes...");
-    let cluster_nodes: BTreeSet<NodeId> = [1, 2, 3, 4]
-        .into_iter()
-        .collect();
-
-    let mut followers = Vec::new();
-    for node_id in [2, 3, 4] {
-        let follower_config = NodeConfig::new(node_id, NodeMode::Follower);
-        let follower = launch_follower(follower_config, network.clone(), cluster_nodes.clone())
-            .await?;
-        println!("   Follower node {} launched", follower.node_id);
-        followers.push(follower);
-    }
-
     // Create a simple workflow
-    println!("\n3. Creating workflow...");
-    let mut builder = GraphBuilder::new("distributed_workflow");
-    builder
+    println!("\n1. Creating workflow...");
+    let workflow_graph = GraphBuilder::new("distributed_workflow")
         .add_node("task1", "handler1", vec![], vec![], None)
         .add_node("task2", "handler2", vec![], vec![], None)
         .add_node("task3", "handler3", vec![], vec![], None)
         .add_simple_edge("task1", "task2")
         .add_simple_edge("task2", "task3")
-        .set_root("task1");
+        .set_root("task1")
+        .build()?;
 
-    let graph = builder.build()?;
-    let workflow_id = WorkflowId::default();
-    let retry_config = RetryConfig::default();
-    let workflow = graph_to_workflow(graph, workflow_id, retry_config, serde_json::json!({}))?;
+    let workflow_def = WorkflowDef::from_graph("distributed_workflow", workflow_graph, RetryConfig::default());
+    let workflow_id = workflow_def.workflow_id;
 
-    let scheduled = workflow.schedule()?;
-    let running = scheduled.start()?;
+    // Launch cluster using builder pattern
+    println!("\n2. Launching cluster...");
+    let nodes = launch_cluster(vec![
+        (1, NodeMode::Leader, vec![workflow_def.clone()]),
+        (2, NodeMode::Follower, vec![]),
+        (3, NodeMode::Follower, vec![]),
+        (4, NodeMode::Follower, vec![]),
+    ])
+    .await?;
 
-    // Create app on leader
-    let app = Arc::new(FlowRaftApp::new(
-        leader.raft.clone(),
-        leader.state_machine.clone(),
-    ));
+    println!("   Cluster launched with {} nodes", nodes.len());
 
+    // Get the leader app for workflow registration verification
+    let leader_app = nodes[0].app();
+    
     // Create executors on all nodes (any node can execute tasks)
-    let leader_executor = Arc::new(WorkflowExecutor::new(
-        leader.raft.clone(),
-        leader.state_machine.clone(),
-        1,
-    ));
-
-    let mut executors = vec![leader_executor];
-    for follower in &followers {
+    let mut executors = Vec::new();
+    for node in &nodes {
         let executor = Arc::new(WorkflowExecutor::new(
-            follower.raft.clone(),
-            follower.state_machine.clone(),
-            follower.node_id,
+            node.app().raft().clone(),
+            node.app().state_machine().clone(),
+            node.node_id(),
         ));
         executors.push(executor);
     }
@@ -146,17 +109,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await;
     }
 
-    // Create workflow on leader
-    println!("\n4. Creating workflow on leader...");
-    let snapshot = flow_raft::core::WorkflowSnapshot::from_workflow(&running);
-    let request = Request::CreateWorkflow {
-        workflow: snapshot.clone(),
-    };
-    app.create_workflow(request).await?;
-    println!("   Workflow created");
+    // Workflow is already registered via builder pattern
+    println!("\n3. Workflow registered on leader");
 
     // Wait for replication with retries
-    println!("\n5. Verifying replication...");
+    println!("\n4. Verifying replication...");
     let mut all_replicated = false;
     for attempt in 0..10 {
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;

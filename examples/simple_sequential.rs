@@ -1,17 +1,8 @@
 //! Simple sequential workflow example
 //!
-//! Demonstrates a basic workflow with 3 sequential tasks.
+//! Demonstrates a basic workflow with 3 sequential tasks using the simplified API.
 
-use flow_raft::api::graph::GraphBuilder;
-use flow_raft::api::handlers::HandlerRegistry;
-use flow_raft::core::{RetryConfig, TaskId, WorkflowId};
-use flow_raft::raft::app::FlowRaftApp;
-use flow_raft::raft::config::default_config;
-use flow_raft::raft::executor::{TaskHandler, WorkflowExecutor};
-use flow_raft::raft::network::MemoryNetworkFactory;
-use flow_raft::raft::storage::{LogStore, StateMachineStore};
-use flow_raft::raft::types::Request;
-use flow_raft::api::graph::converter::graph_to_workflow;
+use flow_raft::prelude::*;
 use std::sync::Arc;
 
 struct SimpleTaskHandler {
@@ -51,35 +42,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let graph = builder.build()?;
     println!("Graph built with {} nodes", graph.nodes.len());
 
-    // Convert graph to workflow
-    let workflow_id = WorkflowId::default();
+    // Convert graph to workflow definition
     let default_retry = RetryConfig::default();
-    let workflow = graph_to_workflow(graph, workflow_id, default_retry.clone(), serde_json::json!({}))?;
+    let workflow_def = WorkflowDef::from_graph("simple_workflow", graph, default_retry.clone());
 
-    // Schedule and start workflow
-    let scheduled = workflow.schedule()?;
-    let running = scheduled.start()?;
+    println!("Workflow definition created");
 
-    println!("Workflow scheduled and started");
-
-    // Create Raft infrastructure
-    let node_id = 1;
-    let config = Arc::new(default_config().validate().unwrap());
-    let network = MemoryNetworkFactory::new();
-    let log_store = LogStore::default();
-    let state_machine = StateMachineStore::default();
-
-    let raft = openraft::Raft::new(node_id, config, network, log_store, state_machine.clone())
-        .await?;
-    let raft = Arc::new(raft);
-
-    // Initialize cluster
-    raft.initialize([1u64].into_iter().collect::<std::collections::BTreeSet<_>>())
+    // Create single-node app using builder pattern
+    let app = FlowRaftApp::builder()
+        .with_node_id(1)
+        .with_workflows(vec![workflow_def.clone()])
+        .enable_metrics(true)
+        .build_single_node()
         .await?;
 
-    // Create app and executor
-    let app = Arc::new(FlowRaftApp::new(raft.clone(), state_machine.clone()));
-    let executor = Arc::new(WorkflowExecutor::new(raft, state_machine.clone(), node_id));
+    println!("FlowRaft app created using builder pattern");
+
+    // Get workflow ID from the definition
+    let workflow_id = workflow_def.workflow_id;
+
+    // Setup handlers for execution
+    let executor = Arc::new(WorkflowExecutor::new(
+        app.raft().clone(),
+        app.state_machine().clone(),
+        1,
+    ));
     let registry = Arc::new(HandlerRegistry::new());
 
     // Register handlers
@@ -111,21 +98,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await;
 
-    // Create workflow snapshot and store it
-    let snapshot = flow_raft::core::WorkflowSnapshot::from_workflow(&running);
-    let request = Request::CreateWorkflow {
-        workflow: snapshot.clone(),
-    };
-    app.create_workflow(request).await?;
-
-    println!("Workflow created in Raft cluster");
+    // Workflow is already registered via builder pattern
+    println!("Workflow registered in Raft cluster");
     
     // Wait for workflow to be stored
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
     // Execute the workflow
     println!("\nExecuting workflow...");
-    let handler_executor = flow_raft::api::handlers::executor::HandlerExecutor::new(
+    let handler_executor = HandlerExecutor::new(
         executor.clone(),
         registry.clone(),
     );

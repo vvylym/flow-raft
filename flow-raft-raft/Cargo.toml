@@ -1,0 +1,28 @@
+[package]
+name = "flow-raft-raft"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Raft integration for FlowRaft workflow engine"
+
+[dependencies]
+flow-raft-core = { path = "../flow-raft-core" }
+flow-raft-api = { path = "../flow-raft-api" }
+flow-raft-observability = { path = "../flow-raft-observability" }
+openraft.workspace = true
+tokio.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+indexmap.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+rstest = "0.26"
+
+[lints]
+workspace = true

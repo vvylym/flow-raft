@@ -59,7 +59,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
-    let input = Input { value: "test".to_string() };
+    let input = Input {
+        value: "test".to_string(),
+    };
     if let Some(mut w) = app.get_workflow(&workflow_id).await {
         w.inputs = serde_json::to_value(&input).unwrap();
         app.create_workflow(WorkflowCommandBuilder::transition_workflow(workflow_id, w))
@@ -83,7 +85,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .cloned()
         .expect("task1 output");
     let out: Output = serde_json::from_value(out).expect("Output");
-    assert_eq!(out.value, "processed: test", "task1 must transform input correctly");
+    assert_eq!(
+        out.value, "processed: test",
+        "task1 must transform input correctly"
+    );
 
     println!("✓ Observability example completed (output={})", out.value);
     Ok(())

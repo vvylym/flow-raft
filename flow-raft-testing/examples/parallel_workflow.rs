@@ -64,7 +64,10 @@ async fn main() -> Result<(), String> {
                         "  OrderResult: order_id={} items_processed={}",
                         o.order_id, o.items_processed
                     );
-                    assert_eq!(o, expected, "OrderResult must match expected from test case");
+                    assert_eq!(
+                        o, expected,
+                        "OrderResult must match expected from test case"
+                    );
                 }
             }
             Ok(())

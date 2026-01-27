@@ -6,7 +6,7 @@
 
 use flow_raft::prelude::*;
 use flow_raft_testing::workflows::{
-    order_pipeline_cases, order_pipeline_graph, receipt_from_snapshot, Receipt,
+    Receipt, order_pipeline_cases, order_pipeline_graph, receipt_from_snapshot,
 };
 
 #[tokio::main]

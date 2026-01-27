@@ -185,8 +185,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .expect("merge output");
     let out: BatchResult = serde_json::from_value(out).expect("BatchResult");
     assert_eq!(out.batch_id, "batch_1");
-    assert_eq!(out.processed_count, 5, "all 5 process_item nodes must run and return processed:true");
+    assert_eq!(
+        out.processed_count, 5,
+        "all 5 process_item nodes must run and return processed:true"
+    );
 
-    println!("✓ Parallel workflow completed (processed_count={})", out.processed_count);
+    println!(
+        "✓ Parallel workflow completed (processed_count={})",
+        out.processed_count
+    );
     Ok(())
 }

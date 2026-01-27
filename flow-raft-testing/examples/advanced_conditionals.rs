@@ -144,8 +144,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .cloned()
         .expect("high_priority_handler output");
     let out: HandlerOutput = serde_json::from_value(out).expect("HandlerOutput");
-    assert_eq!(out.status, "processed_high", "switch must route 'high' to high_priority_handler");
+    assert_eq!(
+        out.status, "processed_high",
+        "switch must route 'high' to high_priority_handler"
+    );
 
-    println!("✓ Advanced conditionals example completed (status={})", out.status);
+    println!(
+        "✓ Advanced conditionals example completed (status={})",
+        out.status
+    );
     Ok(())
 }

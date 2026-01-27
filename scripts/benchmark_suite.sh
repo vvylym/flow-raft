@@ -15,6 +15,5 @@ cargo bench --bench execution
 
 echo "All benchmarks completed!"
 echo ""
-echo "To generate flamegraphs, run:"
-echo "  ./scripts/generate_flamegraph.sh registration"
-echo "  ./scripts/generate_flamegraph.sh execution"
+echo "For flamegraphs: use perf and inferno-flamegraph with the bench binaries"
+echo "in target/release/deps/ (e.g. registration-*, execution-*)."

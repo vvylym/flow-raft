@@ -7,22 +7,13 @@
 
 set -e
 
-echo "Running FlowRaft benchmarks..."
-cargo bench --bench flow_raft_benchmarks
+echo "Running registration benchmarks..."
+cargo bench --bench registration
 
-echo "Running Temporal comparison benchmarks..."
-cargo bench --bench temporal_comparison
-
-echo "Running Airflow comparison benchmarks..."
-cargo bench --bench airflow_comparison
-
-echo "Running workflow execution benchmarks..."
-cargo bench --bench workflow_execution
+echo "Running execution benchmarks..."
+cargo bench --bench execution
 
 echo "All benchmarks completed!"
 echo ""
-echo "To generate flamegraphs, run:"
-echo "  ./scripts/generate_flamegraph.sh flow_raft_benchmarks"
-echo "  ./scripts/generate_flamegraph.sh temporal_comparison"
-echo "  ./scripts/generate_flamegraph.sh airflow_comparison"
-echo "  ./scripts/generate_flamegraph.sh workflow_execution"
+echo "For flamegraphs: use perf and inferno-flamegraph with the bench binaries"
+echo "in target/release/deps/ (e.g. registration-*, execution-*)."

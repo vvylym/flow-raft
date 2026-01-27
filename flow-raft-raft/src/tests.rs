@@ -167,6 +167,11 @@ mod tests {
             nodes.push(node.unwrap());
         }
 
+        // Register each node's Raft so MemoryNetwork can route append_entries/vote
+        for node in &nodes {
+            network.register_raft(node.node_id, node.raft.clone()).await;
+        }
+
         // Initialize cluster with all 4 nodes (on the first node)
         let node_ids: BTreeSet<NodeId> = (1..=4).collect();
         let init_result = nodes[0].initialize_cluster(node_ids).await;
@@ -198,6 +203,11 @@ mod tests {
                 .await
                 .unwrap();
             nodes.push(node);
+        }
+
+        // Register each node's Raft so MemoryNetwork can route append_entries/vote
+        for node in &nodes {
+            network.register_raft(node.node_id, node.raft.clone()).await;
         }
 
         // Initialize cluster with all 4 nodes
@@ -252,6 +262,11 @@ mod tests {
                 .await
                 .unwrap();
             nodes.push(node);
+        }
+
+        // Register each node's Raft so MemoryNetwork can route append_entries/vote
+        for node in &nodes {
+            network.register_raft(node.node_id, node.raft.clone()).await;
         }
 
         // Initialize cluster with all 4 nodes

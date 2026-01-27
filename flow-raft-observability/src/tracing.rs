@@ -6,7 +6,6 @@
 
 use opentelemetry::KeyValue;
 use opentelemetry::global;
-use opentelemetry::trace::TraceError;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::Resource;
 
@@ -39,35 +38,26 @@ pub fn init_tracing(
         TracingExporter::OTLP => {
             let endpoint = endpoint.unwrap_or_else(|| "http://localhost:4317".to_string());
 
-            // Initialize OTLP tracer provider
-            // Note: There's a compatibility issue between tracing-opentelemetry 0.25
-            // and tracing-subscriber 0.3 that prevents full integration.
-            // For now, we initialize the OTLP exporter but use console logging.
-            // Full integration will be completed once version compatibility is resolved.
-            let mut exporter = opentelemetry_otlp::new_exporter().tonic();
+            let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
+                .with_tonic()
+                .with_endpoint(endpoint)
+                .build()
+                .map_err(|e| format!("Failed to create OTLP span exporter: {}", e))?;
 
-            // Set endpoint using WithExportConfig trait
-            exporter = exporter.with_endpoint(endpoint.clone());
+            let resource = Resource::builder_empty()
+                .with_attributes([KeyValue::new("service.name", service_name.clone())])
+                .build();
+            let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+                .with_batch_exporter(otlp_exporter)
+                .with_resource(resource)
+                .build();
+            global::set_tracer_provider(tracer_provider);
 
-            // Install the tracer provider (this sets up the global provider)
-            opentelemetry_otlp::new_pipeline()
-                .tracing()
-                .with_exporter(exporter)
-                .with_trace_config(opentelemetry_sdk::trace::Config::default().with_resource(
-                    Resource::new(vec![KeyValue::new("service.name", service_name.clone())]),
-                ))
-                .install_batch(opentelemetry_sdk::runtime::Tokio)
-                .map_err(|e: TraceError| format!("Failed to initialize OTLP tracer: {}", e))?;
-
-            // For now, use console logging until tracing-opentelemetry compatibility is resolved
-            // The OTLP exporter is initialized and will work for direct OpenTelemetry API usage
             tracing_subscriber::fmt()
                 .try_init()
                 .map_err(|e| format!("Failed to initialize subscriber: {}", e))?;
         }
         TracingExporter::None => {
-            // Just use console logging
-            // Use try_init to avoid panic if already initialized
             tracing_subscriber::fmt()
                 .try_init()
                 .map_err(|e| format!("Failed to initialize subscriber: {}", e))?;
@@ -80,7 +70,9 @@ pub fn init_tracing(
 /// Shutdown tracing
 ///
 /// This should be called when the application is shutting down to ensure
-/// all traces are flushed.
+/// all traces are flushed. No-op when using the global tracer provider;
+/// consider holding and shutting down the TracerProvider explicitly if you need flush-on-exit.
 pub fn shutdown_tracing() {
-    global::shutdown_tracer_provider();
+    // Global provider in 0.31 does not expose shutdown; force_flush is on BatchSpanProcessor.
+    // Leaving as no-op. Callers that need flush can hold the SdkTracerProvider and call shutdown.
 }

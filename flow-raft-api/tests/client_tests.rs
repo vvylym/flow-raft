@@ -1,8 +1,7 @@
 //! Tests for client API
 
 use flow_raft_api::client::*;
-use flow_raft_api::workflow::WorkflowDef;
-use flow_raft_core::{RetryConfig, WorkflowId};
+use flow_raft_core::WorkflowId;
 use serde_json::json;
 use std::time::Duration;
 
@@ -49,6 +48,29 @@ fn test_workflow_status_variants() {
 }
 
 #[test]
+fn test_flow_raft_client_builder_new_and_default() {
+    let b = FlowRaftClientBuilder::new();
+    assert!(std::mem::size_of_val(&b) > 0);
+    let b2 = FlowRaftClientBuilder::default();
+    assert!(std::mem::size_of_val(&b2) > 0);
+}
+
+#[test]
+fn test_flow_raft_client_builder_with_endpoint_and_timeout() {
+    let b = FlowRaftClientBuilder::new()
+        .with_endpoint("http://127.0.0.1:50051")
+        .with_timeout(Duration::from_secs(60));
+    let client = b.build();
+    assert!(std::mem::size_of_val(&client) > 0);
+}
+
+#[test]
+fn test_flow_raft_client_builder_build_uses_defaults() {
+    let client = FlowRaftClientBuilder::new().build();
+    assert!(std::mem::size_of_val(&client) > 0);
+}
+
+#[test]
 fn test_flow_raft_client_new() {
     let client = FlowRaftClient::new("http://localhost:8080");
     // timeout field is private, test that client is created
@@ -62,18 +84,17 @@ fn test_flow_raft_client_with_timeout() {
     assert!(std::mem::size_of_val(&client) > 0);
 }
 
+fn nop(_: ()) -> Result<(), String> {
+    Ok(())
+}
+
 #[tokio::test]
 async fn test_client_submit_workflow() {
     let client = FlowRaftClient::new("http://localhost:8080");
-    let workflow = WorkflowDef::from_graph(
-        "test",
-        flow_raft_api::graph::GraphBuilder::new("test")
-            .add_node("task1", "handler1", vec![], vec![], None)
-            .set_root("task1")
-            .build()
-            .unwrap(),
-        RetryConfig::default(),
-    );
+    let mut b = flow_raft_api::graph::TypedGraphBuilder::new("test");
+    b.add_node("task1", flow_raft_api::graph::node(nop), None)
+        .set_root("task1");
+    let workflow = b.build().unwrap().workflow_def("test").unwrap();
     let result = client.submit_workflow(workflow, json!({})).await;
     // Now that client is implemented, it will try to connect and fail
     assert!(result.is_err());
@@ -106,13 +127,17 @@ async fn test_client_get_workflow_output_timeout() {
         FlowRaftClient::new("http://localhost:8080").with_timeout(Duration::from_millis(10));
     let execution_id = WorkflowExecutionId::from(WorkflowId::default());
 
-    // This will timeout quickly since get_workflow_status always returns an error
-    // and we have a very short timeout
+    // With no server running and a short timeout, we expect an error (connection, timeout, or server).
     let result = client.get_workflow_output(execution_id).await;
     assert!(result.is_err());
     match result {
-        Err(ClientError::Connection(_)) | Err(ClientError::Timeout(_)) => {}
-        _ => panic!("Expected Connection or Timeout error"),
+        Err(ClientError::Connection(_))
+        | Err(ClientError::Timeout(_))
+        | Err(ClientError::Server(_)) => {}
+        other => panic!(
+            "Expected Connection, Timeout, or Server error, got {:?}",
+            other
+        ),
     }
 }
 

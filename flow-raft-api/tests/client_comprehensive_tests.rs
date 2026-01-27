@@ -1,6 +1,5 @@
 //! Comprehensive tests for FlowRaftClient
 
-use flow_raft_api::WorkflowDef;
 use flow_raft_api::client::{ClientError, FlowRaftClient, WorkflowExecutionId, WorkflowStatus};
 use flow_raft_core::WorkflowId;
 use flow_raft_raft::app::FlowRaftApp;
@@ -126,15 +125,14 @@ async fn create_test_server() -> (JoinHandle<Result<(), tonic::transport::Error>
 async fn test_client_submit_workflow() {
     let (_handle, endpoint) = create_test_server().await;
     let client = FlowRaftClient::new(&endpoint);
-    let workflow = WorkflowDef::from_graph(
-        "test",
-        flow_raft_api::graph::GraphBuilder::new("test")
-            .add_node("task1", "handler1", vec![], vec![], None)
-            .set_root("task1")
-            .build()
-            .unwrap(),
-        flow_raft_core::RetryConfig::default(),
-    );
+    let mut b = flow_raft_api::graph::TypedGraphBuilder::new("test");
+    b.add_node(
+        "task1",
+        flow_raft_api::graph::node(|_: ()| Ok::<(), String>(())),
+        None,
+    )
+    .set_root("task1");
+    let workflow = b.build().unwrap().workflow_def("test").unwrap();
     let result = client
         .submit_workflow(workflow, serde_json::json!({}))
         .await;

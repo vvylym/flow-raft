@@ -143,6 +143,16 @@ pub fn validate_graph(graph: &Graph) -> Result<(), GraphValidationError> {
                         }
                     }
                 }
+                crate::graph::builder::EdgeSpec::Switch { branches, .. } => {
+                    for b in branches {
+                        if !graph.nodes.contains_key(b) {
+                            return Err(GraphValidationError::NodeNotFound {
+                                node: b.as_ref().to_string(),
+                                edge: from_name.as_ref().to_string(),
+                            });
+                        }
+                    }
+                }
             }
         }
     }
@@ -266,6 +276,18 @@ fn build_dependency_graph(graph: &Graph) -> DependencyGraph {
                             .push(target.clone());
                     }
                 }
+                crate::graph::builder::EdgeSpec::Switch { branches, .. } => {
+                    for b in branches {
+                        dependencies
+                            .entry(b.clone())
+                            .or_default()
+                            .push(from_name.clone());
+                        dependents
+                            .entry(from_name.clone())
+                            .or_default()
+                            .push(b.clone());
+                    }
+                }
             }
         }
     }
@@ -369,6 +391,7 @@ fn find_cycle(graph: &Graph) -> Option<Vec<String>> {
                         vec![then.clone(), otherwise.clone()]
                     }
                     crate::graph::builder::EdgeSpec::Split { targets, .. } => targets.clone(),
+                    crate::graph::builder::EdgeSpec::Switch { branches, .. } => branches.clone(),
                 };
 
                 for target in targets {
@@ -420,6 +443,9 @@ fn compute_reachable_nodes<'a>(graph: &'a Graph, root: &'a NodeName) -> HashSet<
                     }
                     crate::graph::builder::EdgeSpec::Split { targets, .. } => {
                         targets.iter().collect()
+                    }
+                    crate::graph::builder::EdgeSpec::Switch { branches, .. } => {
+                        branches.iter().collect()
                     }
                 };
 

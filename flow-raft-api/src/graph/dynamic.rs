@@ -1,6 +1,9 @@
 //! Dynamic graph builder for FlowRaft
 //!
 //! Provides runtime-defined workflows with type erasure using serde_json::Value.
+//! Kept crate-internal for dynamic_graph_to_workflow; not part of public API.
+
+#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -314,5 +317,133 @@ impl DynamicGraphBuilder {
             root,
             merge_specs: self.merge_specs.clone(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::graph::builder::{ConditionObject, MergeObject, SplitObject};
+
+    use super::*;
+
+    #[test]
+    fn dynamic_builder_new_and_add_node() {
+        let mut b = DynamicGraphBuilder::new("t");
+        b.add_node("n1", "h1", vec![], vec![], None);
+        let g = b.build().unwrap();
+        assert_eq!(g.name, "t");
+        assert_eq!(g.nodes.len(), 1);
+    }
+
+    #[test]
+    fn dynamic_builder_set_root_and_build() {
+        let mut b = DynamicGraphBuilder::new("t");
+        b.add_node("n1", "h1", vec![], vec![], None).set_root("n1");
+        let g = b.build().unwrap();
+        assert_eq!(g.root.as_ref().map(|n| n.as_ref()), Some("n1"));
+    }
+
+    #[test]
+    fn dynamic_builder_add_simple_edge() {
+        let mut b = DynamicGraphBuilder::new("t");
+        b.add_node("n1", "h1", vec![], vec![], None)
+            .add_node("n2", "h2", vec![], vec![], None)
+            .add_simple_edge("n1", "n2")
+            .set_root("n1");
+        let g = b.build().unwrap();
+        assert_eq!(g.nodes.len(), 2);
+        assert!(g.edges.get(&NodeName::new("n1")).is_some());
+    }
+
+    #[test]
+    fn dynamic_builder_add_conditional_edge() {
+        let mut b = DynamicGraphBuilder::new("t");
+        b.add_node("n1", "h1", vec![], vec![], None)
+            .add_node("then", "h2", vec![], vec![], None)
+            .add_node("else", "h3", vec![], vec![], None);
+        let cond = Arc::new(AlwaysThen);
+        b.add_conditional_edge("n1", cond, "then", "else")
+            .set_root("n1");
+        let g = b.build().unwrap();
+        assert_eq!(g.nodes.len(), 3);
+    }
+
+    #[test]
+    fn dynamic_builder_add_split_edge() {
+        let mut b = DynamicGraphBuilder::new("t");
+        b.add_node("n1", "h1", vec![], vec![], None)
+            .add_node("a", "ha", vec![], vec![], None)
+            .add_node("b", "hb", vec![], vec![], None);
+        let split = Arc::new(AllTargets);
+        b.add_split_edge("n1", split, vec!["a", "b"]).set_root("n1");
+        let g = b.build().unwrap();
+        assert_eq!(g.nodes.len(), 3);
+        let edges = g.edges.get(&NodeName::new("n1")).unwrap();
+        assert_eq!(edges.len(), 1);
+        assert!(matches!(edges[0], DynamicEdgeSpec::Split { .. }));
+    }
+
+    #[test]
+    fn dynamic_builder_add_merge_edge() {
+        let mut b = DynamicGraphBuilder::new("t");
+        b.add_node("a", "ha", vec![], vec![], None)
+            .add_node("b", "hb", vec![], vec![], None)
+            .add_node("out", "hout", vec![], vec![], None);
+        let merge = Arc::new(ConcatMerge);
+        b.add_merge_edge(vec!["a", "b"], merge, "out").set_root("a");
+        let g = b.build().unwrap();
+        assert_eq!(g.merge_specs.len(), 1);
+        let (sources, _) = g.merge_specs.get(&NodeName::new("out")).unwrap();
+        assert_eq!(sources.len(), 2);
+    }
+
+    #[test]
+    fn dynamic_builder_build_empty_err() {
+        let b = DynamicGraphBuilder::new("empty");
+        let res = b.build();
+        assert!(matches!(res, Err(e) if e == "graph has no nodes"));
+    }
+
+    #[test]
+    fn dynamic_edge_spec_debug_split() {
+        let spec = DynamicEdgeSpec::Split {
+            split: Arc::new(AllTargets),
+            targets: vec![NodeName::new("a"), NodeName::new("b")],
+        };
+        let s = format!("{:?}", spec);
+        assert!(s.contains("Split"));
+        assert!(s.contains("a"));
+        assert!(s.contains("b"));
+    }
+
+    #[test]
+    fn dynamic_graph_debug() {
+        let mut b = DynamicGraphBuilder::new("dbg");
+        b.add_node("n1", "h1", vec![], vec![], None);
+        let g = b.build().unwrap();
+        let s = format!("{:?}", g);
+        assert!(s.contains("DynamicGraph"));
+        assert!(s.contains("dbg"));
+    }
+
+    struct AlwaysThen;
+    impl ConditionObject for AlwaysThen {
+        fn evaluate(&self, _: serde_json::Value) -> Result<NodeName, String> {
+            Ok(NodeName::new("then"))
+        }
+    }
+
+    struct AllTargets;
+    impl SplitObject for AllTargets {
+        fn evaluate(&self, _: serde_json::Value) -> Result<Vec<NodeName>, String> {
+            Ok(vec![NodeName::new("a"), NodeName::new("b")])
+        }
+    }
+
+    struct ConcatMerge;
+    impl MergeObject for ConcatMerge {
+        fn merge(&self, inputs: Vec<serde_json::Value>) -> Result<serde_json::Value, String> {
+            Ok(serde_json::json!(inputs))
+        }
     }
 }

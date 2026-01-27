@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::FlowRaftApp;
+use super::FlowRaftApp;
 use crate::config::RaftConfig;
 use crate::network::MemoryNetworkFactory;
 use crate::node::FlowRaftNode;
@@ -248,12 +248,5 @@ impl FlowRaftAppBuilder {
 impl Default for FlowRaftAppBuilder {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl FlowRaftApp {
-    /// Create a new builder for FlowRaft application
-    pub fn builder() -> FlowRaftAppBuilder {
-        FlowRaftAppBuilder::new()
     }
 }

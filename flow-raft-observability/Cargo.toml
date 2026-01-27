@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Observability (metrics and tracing) for FlowRaft"
+readme = "README.md"
 
 [dependencies]
 flow-raft-core = { path = "../flow-raft-core" }
@@ -25,7 +26,7 @@ indexmap.workspace = true
 uuid.workspace = true
 opentelemetry = { workspace = true, features = ["trace", "metrics"] }
 opentelemetry_sdk = { workspace = true, features = ["rt-tokio"] }
-opentelemetry-otlp = { workspace = true, features = ["trace", "tonic"] }
+opentelemetry-otlp = { workspace = true, features = ["trace", "grpc-tonic"] }
 tracing-opentelemetry = { workspace = true }
 
 [lints]

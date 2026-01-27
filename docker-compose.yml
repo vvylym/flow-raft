@@ -1,0 +1,90 @@
+# Three-node FlowRaft cluster.
+# Build: docker compose build
+# Run:   docker compose up -d
+# First node (node-1) initializes the cluster with all 3; node-2 and node-3 have empty PEERS and do not init.
+
+services:
+  node-1:
+    build: .
+    ports:
+      - "50051:50051"
+      - "9090:9090"
+      - "5010:5010"
+    environment:
+      NODE_ID: 1
+      GRPC_BIND: "0.0.0.0:50051"
+      HTTP_BIND: "0.0.0.0:9090"
+      RAFT_BIND: "0.0.0.0:5010"
+      DATA_PATH: /data
+      PEERS: "2=node-2:5011,3=node-3:5012"
+    volumes:
+      - node1-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - flowraft
+
+  node-2:
+    build: .
+    ports:
+      - "50052:50052"
+      - "9091:9091"
+      - "5011:5011"
+    environment:
+      NODE_ID: 2
+      GRPC_BIND: "0.0.0.0:50052"
+      HTTP_BIND: "0.0.0.0:9091"
+      RAFT_BIND: "0.0.0.0:5011"
+      DATA_PATH: /data
+      # PEERS empty: joining node, does not run init
+    volumes:
+      - node2-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      - node-1
+    networks:
+      - flowraft
+
+  node-3:
+    build: .
+    ports:
+      - "50053:50053"
+      - "9092:9092"
+      - "5012:5012"
+    environment:
+      NODE_ID: 3
+      GRPC_BIND: "0.0.0.0:50053"
+      HTTP_BIND: "0.0.0.0:9092"
+      RAFT_BIND: "0.0.0.0:5012"
+      DATA_PATH: /data
+    volumes:
+      - node3-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9092/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      - node-1
+    networks:
+      - flowraft
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:
+
+networks:
+  flowraft:
+    name: flowraft
+    driver: bridge

@@ -2,6 +2,7 @@
 members = [
     "flow-raft",
     "flow-raft-core",
+    "flow-raft-testing",
     "flow-raft-raft",
     "flow-raft-api",
     "flow-raft-observability",
@@ -13,8 +14,8 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.92.0"
-authors = ["Guillaume Mpouli <235853469+vvylym@users.noreply.github.com>"]
+rust-version = "1.85.0"
+authors = ["Guillaume M. <235853469+vvylym@users.noreply.github.com>"]
 license = "MIT"
 repository = "https://github.com/vvylym/flow-raft"
 description = "A distributed, stateful workflow engine optimized for correctness, fault tolerance, and deterministic execution."
@@ -24,16 +25,16 @@ description = "A distributed, stateful workflow engine optimized for correctness
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.19", features = ["serde", "v4"] }
+uuid = { version = "1.20", features = ["serde", "v4"] }
 thiserror = "2.0"
-indexmap = { version = "2.12", features = ["serde", "rayon"] }
-smallvec = { version = "1.13", features = ["serde"] }
+indexmap = { version = "2.13", features = ["serde", "rayon"] }
+smallvec = { version = "1.15", features = ["serde"] }
 
 # Raft
-openraft = { version = "0.9.21", features = ["serde", "storage-v2"] }
+openraft = { version = "0.9", features = ["serde", "storage-v2"] }
 
 # Async
-tokio = { version = "1.48", features = ["full"] }
+tokio = { version = "1.49", features = ["full"] }
 futures = "0.3"
 tokio-stream = "0.1"
 
@@ -42,10 +43,10 @@ metrics = "0.24"
 metrics-exporter-prometheus = "0.18"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
-opentelemetry = { version = "0.24", features = ["trace", "metrics"] }
-opentelemetry_sdk = { version = "0.24", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.17", features = ["trace", "tonic"] }
-tracing-opentelemetry = "0.25"
+opentelemetry = { version = "0.31", features = ["trace", "metrics"] }
+opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.31", features = ["trace", "grpc-tonic"] }
+tracing-opentelemetry = "0.32"
 
 # gRPC
 tonic = "0.14"
@@ -54,10 +55,10 @@ prost = "0.14"
 prost-types = "0.14"
 
 # Utilities
-derive_more = { version = "2.1.1", features = ["display"] }
+derive_more = { version = "2.1", features = ["display"] }
 rayon = "1.11"
 http-body-util = "0.1"
-bytes = "1.7"
+bytes = "1.11"
 
 # Build dependencies
 tonic-prost-build = "0.14"
@@ -74,6 +75,7 @@ clap = { version = "4.5", features = ["derive"] }
 # inferno = "0.13"
 
 [workspace.lints.rust]
+unsafe_code = "forbid"
 missing_docs = "deny"
 
 # Benchmarks are defined at the workspace root level

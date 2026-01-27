@@ -16,7 +16,7 @@ pub mod types;
 mod tests;
 
 pub use app::FlowRaftApp;
-pub use app::builder::{AppBuilderError, FlowRaftAppBuilder};
+pub use app::{AppBuilderError, FlowRaftAppBuilder};
 pub use config::RaftConfig;
 pub use node::FlowRaftNode;
 pub use types::TypeConfig;

@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Server implementation for FlowRaft workflow engine"
+readme = "README.md"
 
 [dependencies]
 flow-raft-core = { path = "../flow-raft-core" }
@@ -29,12 +30,9 @@ uuid.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-clap = { workspace = true, optional = true }
 
 [features]
 default = []
-cli = ["clap"]
-
 
 [lints]
 workspace = true

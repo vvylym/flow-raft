@@ -92,6 +92,16 @@ pub fn graph_to_workflow(
                         }
                     }
                 }
+                crate::graph::builder::EdgeSpec::Switch { branches, .. } => {
+                    for branch_name in branches {
+                        if let Some(branch_node) = graph.nodes.get(branch_name) {
+                            let branch_task_id = branch_node.task_id;
+                            if let Some(deps) = workflow.dependencies.get_mut(&branch_task_id) {
+                                deps.add_prerequisite(from_task_id);
+                            }
+                        }
+                    }
+                }
             }
         }
     }

@@ -26,28 +26,17 @@ Benchmarks run on modern hardware (3+ runs per benchmark, averaged):
 
 ## Benchmark Suites
 
-### `workflow_execution`
+### `registration`
 
-Measures core workflow execution performance:
-- `create_workflow_10_tasks`: Workflow creation overhead
-- `schedule_workflow_10_tasks`: Scheduling latency
-- `store_workflow_10_tasks`: State persistence latency
+Workflow build-and-register using shared `flow_raft_testing::workflows::bench_workflows`:
+- `registration/linear/[10,50,100]`: linear nop chains
+- `registration/parallel/[10,50,100]`: fan-out then merge
+- `registration/conditional`: conditional nop graph
 
-### `flow_raft_benchmarks`
+### `execution`
 
-Comprehensive performance metrics:
-- Sequential workflows (10/50/100 tasks)
-- Parallel workflows (10/50 tasks)
-- Workflow registration throughput
-- Task execution throughput
-
-### `airflow_comparison` / `temporal_comparison`
-
-FlowRaft-only benchmarks (comparison claims removed):
-- Simple workflow latency
-- Workflow throughput
-- Large workflow (100 tasks)
-- Parallel execution patterns
+- `create_and_schedule/[10,100]`: graph→workflow, schedule, start (no Raft)
+- `run_order_pipeline`: full run with `flow_raft_testing::workflows::order_pipeline`
 
 ## Running Benchmarks
 
@@ -56,13 +45,11 @@ FlowRaft-only benchmarks (comparison claims removed):
 cargo bench
 
 # Specific suite
-cargo bench --bench workflow_execution
-cargo bench --bench flow_raft_benchmarks
-cargo bench --bench airflow_comparison
-cargo bench --bench temporal_comparison
+cargo bench --bench registration
+cargo bench --bench execution
 
 # With profiling
-cargo bench --bench workflow_execution -- --profile-time 10
+cargo bench --bench execution -- --profile-time 10
 ```
 
 ## Performance Characteristics
@@ -96,7 +83,7 @@ Current bottlenecks:
 
 ### In Progress
 - Batch Raft writes for multiple task completions
-- Zero-copy serialization (bincode/postcard)
+- rkyv framing for TCP Raft transport (openraft types via serde_json)
 - Connection pooling for distributed deployments
 
 ### Planned
@@ -113,7 +100,7 @@ Current bottlenecks:
 cargo install flamegraph
 
 # Profile benchmark
-cargo flamegraph --bench workflow_execution -- create_workflow_10_tasks
+cargo flamegraph --bench execution -- create_and_schedule/10
 ```
 
 ### Key Metrics to Monitor

@@ -1,7 +1,14 @@
 //! Tests for gRPC types
 
-use flow_raft_core::{TaskId, WorkflowId};
-use flow_raft_server::grpc::types::{parse_inputs, parse_task_id, parse_workflow_id};
+use chrono::Utc;
+use flow_raft_core::{
+    TaskExecution, TaskId, TaskState, WorkflowId, WorkflowSnapshot, WorkflowState,
+};
+use flow_raft_server::grpc::types::{
+    parse_inputs, parse_task_id, parse_workflow_id, task_execution_to_status,
+    workflow_snapshot_to_status,
+};
+use indexmap::IndexMap;
 
 #[test]
 fn test_parse_workflow_id() {
@@ -56,4 +63,58 @@ fn test_parse_inputs_empty() {
     let parsed = parse_inputs(Some("{}".to_string()));
     assert!(parsed.is_ok());
     assert!(parsed.unwrap().as_object().unwrap().is_empty());
+}
+
+#[test]
+fn test_parse_inputs_none() {
+    let parsed = parse_inputs(None);
+    assert!(parsed.is_ok());
+    assert_eq!(parsed.unwrap(), serde_json::json!({}));
+}
+
+#[test]
+fn test_parse_workflow_id_with_prefix() {
+    let w = WorkflowId::default();
+    let s = format!("workflow:{}", w.as_ref());
+    let parsed = parse_workflow_id(&s);
+    assert!(parsed.is_ok());
+    assert_eq!(parsed.unwrap(), w);
+}
+
+#[test]
+fn test_task_execution_to_status() {
+    let task_id = TaskId::default();
+    let exec = TaskExecution {
+        task_id,
+        state: TaskState::Completed,
+        attempts: 1,
+        last_error: None,
+        outputs: Some(serde_json::json!({"x": 1})),
+        started_at: Some(Utc::now()),
+        completed_at: Some(Utc::now()),
+    };
+    let status = task_execution_to_status(task_id, &exec);
+    assert_eq!(status.task_id, task_id.to_string());
+    assert_eq!(status.state, "completed");
+    assert_eq!(status.attempts, 1);
+}
+
+#[test]
+fn test_workflow_snapshot_to_status() {
+    let snapshot = WorkflowSnapshot {
+        workflow_id: WorkflowId::default(),
+        state: WorkflowState::Running,
+        task_definitions: IndexMap::new(),
+        executions: IndexMap::new(),
+        dependencies: IndexMap::new(),
+        retry_configs: IndexMap::new(),
+        created_at: Utc::now(),
+        started_at: Some(Utc::now()),
+        completed_at: None,
+        inputs: serde_json::json!({}),
+        outputs: None,
+        error_message: None,
+    };
+    let status = workflow_snapshot_to_status(&snapshot);
+    assert_eq!(status.state, "running");
 }

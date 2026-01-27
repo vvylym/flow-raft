@@ -4,8 +4,10 @@
 
 use std::sync::Arc;
 
-use crate::handlers::HandlerRegistry;
-use flow_raft_core::WorkflowId;
+use crate::handlers::{HandlerExecutor, HandlerRegistry};
+use flow_raft_api::graph::graph_to_workflow;
+use flow_raft_api::workflow::parse_workflow_from_json;
+use flow_raft_core::{WorkflowId, WorkflowSnapshot};
 use flow_raft_observability::{HistoryStore, WorkflowWatcher};
 use flow_raft_proto::proto::flow_raft_service_server::FlowRaftService;
 use flow_raft_proto::proto::*;
@@ -19,6 +21,9 @@ use super::types::{
     parse_inputs, parse_task_id, parse_workflow_id, task_execution_to_status,
     workflow_snapshot_to_status,
 };
+
+/// Default maximum iterations for workflow execution when triggered via gRPC.
+const DEFAULT_TRIGGER_MAX_ITERATIONS: usize = 10_000;
 
 /// FlowRaft gRPC service implementation
 pub struct FlowRaftServiceImpl {
@@ -38,6 +43,8 @@ pub struct FlowRaftServiceImpl {
     /// dynamic handler registration, handler discovery, and handler management.
     #[allow(dead_code)] // Reserved for future handler management endpoints
     registry: Arc<HandlerRegistry>,
+    /// When set, trigger_workflow spawns this executor so the task loop runs.
+    handler_executor: Option<Arc<HandlerExecutor>>,
     /// History store for execution history
     history_store: Option<StdArc<HistoryStore>>,
     /// Workflow watcher for real-time event streaming
@@ -55,6 +62,7 @@ impl FlowRaftServiceImpl {
             app,
             executor,
             registry,
+            handler_executor: None,
             history_store: None,
             watcher: None,
         }
@@ -71,6 +79,28 @@ impl FlowRaftServiceImpl {
             app,
             executor,
             registry,
+            handler_executor: None,
+            history_store: None,
+            watcher: Some(watcher),
+        }
+    }
+
+    /// Creates a gRPC service that runs the handler executor when a workflow is triggered.
+    /// Use this when the service should drive task execution: after transitioning the
+    /// workflow to Running, the executor loop is spawned so tasks run and watch_workflow
+    /// receives events.
+    pub fn with_handler_executor(
+        app: Arc<FlowRaftApp>,
+        executor: Arc<WorkflowExecutor>,
+        registry: Arc<HandlerRegistry>,
+        handler_executor: Arc<HandlerExecutor>,
+        watcher: Arc<WorkflowWatcher>,
+    ) -> Self {
+        Self {
+            app,
+            executor,
+            registry,
+            handler_executor: Some(handler_executor),
             history_store: None,
             watcher: Some(watcher),
         }
@@ -92,6 +122,7 @@ impl FlowRaftServiceImpl {
             app,
             executor,
             registry,
+            handler_executor: None,
             history_store: Some(history_store),
             watcher: None,
         }
@@ -105,22 +136,6 @@ impl FlowRaftServiceImpl {
 
 #[tonic::async_trait]
 impl FlowRaftService for FlowRaftServiceImpl {
-    /// Launches a node
-    ///
-    /// # Note
-    /// This endpoint is currently unimplemented. Node launching is handled via
-    /// the CLI interface (`launch_single_node`, `launch_cluster_node`) or
-    /// programmatically using `ClusterNode::new_leader` or `ClusterNode::join_cluster`.
-    /// Remote node management via gRPC may be implemented in a future release.
-    async fn launch_node(
-        &self,
-        _request: tonic::Request<LaunchNodeRequest>,
-    ) -> Result<tonic::Response<LaunchNodeResponse>, tonic::Status> {
-        Err(tonic::Status::unimplemented(
-            "Node launching is handled via CLI or programmatic API. See launch_single_node() or launch_cluster_node()",
-        ))
-    }
-
     /// Gets node status
     async fn get_node_status(
         &self,
@@ -136,30 +151,49 @@ impl FlowRaftService for FlowRaftServiceImpl {
         }))
     }
 
-    /// Defines a workflow
+    /// Defines a workflow by parsing the JSON payload, persisting it in the Raft-backed
+    /// app, and returning a stable workflow_id for use in trigger_workflow / trigger_workflow_by_id.
     ///
-    /// # Note
-    /// This is a partial implementation. Currently, it creates a workflow ID and returns
-    /// a basic workflow definition. A full implementation would:
-    /// 1. Parse the JSON definition into a `Graph` structure
-    /// 2. Convert graph to `WorkflowSnapshot` using `graph_to_workflow`
-    /// 3. Register the workflow via `self.app.create_workflow()`
-    ///
-    /// For now, workflows should be defined programmatically using `GraphBuilder` and
-    /// registered via `ClusterNode::register_workflow` or `FlowRaftApp::register_workflow`.
+    /// The JSON format must match what [FlowRaftClient::submit_workflow](flow_raft_api::client::FlowRaftClient::submit_workflow)
+    /// sends: `{ "name", "graph": { "name", "nodes", "edges", "root" }, "default_retry_config": { ... } }`.
     async fn define_workflow(
         &self,
         request: tonic::Request<DefineWorkflowRequest>,
     ) -> Result<tonic::Response<WorkflowDefinition>, tonic::Status> {
         let req = request.into_inner();
 
-        // Partial implementation: create workflow ID and return basic definition
-        // Full implementation would parse JSON and register workflow via Raft
+        let parsed = parse_workflow_from_json(&req.definition).map_err(|e| {
+            tonic::Status::invalid_argument(format!("define_workflow parse error: {}", e))
+        })?;
+
         let workflow_id = WorkflowId::default();
+
+        let draft = graph_to_workflow(
+            parsed.graph,
+            workflow_id,
+            parsed.default_retry_config.clone(),
+            serde_json::json!({}),
+        )
+        .map_err(|e| {
+            tonic::Status::invalid_argument(format!(
+                "define_workflow graph_to_workflow error: {}",
+                e
+            ))
+        })?;
+
+        let snapshot = WorkflowSnapshot::from_workflow(&draft);
+        let create_request = WorkflowCommandBuilder::create_workflow(snapshot);
+
+        self.app
+            .create_workflow(create_request)
+            .await
+            .map_err(|e| {
+                tonic::Status::internal(format!("define_workflow create_workflow failed: {:?}", e))
+            })?;
 
         Ok(tonic::Response::new(WorkflowDefinition {
             workflow_id: workflow_id.as_ref().to_string(),
-            name: req.name,
+            name: parsed.name,
             status: "draft".to_string(),
         }))
     }
@@ -216,6 +250,17 @@ impl FlowRaftService for FlowRaftServiceImpl {
                     workflow_id, workflow_snapshot.state
                 )));
             }
+        }
+
+        // Spawn handler executor so the task loop runs and watcher receives events
+        if let Some(he) = &self.handler_executor {
+            let he = he.clone();
+            let wf_id = workflow_id;
+            tokio::spawn(async move {
+                let _ = he
+                    .execute_workflow(wf_id, DEFAULT_TRIGGER_MAX_ITERATIONS)
+                    .await;
+            });
         }
 
         Ok(tonic::Response::new(WorkflowExecution {
@@ -414,6 +459,44 @@ impl FlowRaftService for FlowRaftServiceImpl {
             started_at: status.started_at,
             completed_at: status.completed_at,
         }))
+    }
+
+    /// Runs a single task on this node (for distributed execution).
+    /// The caller (orchestrator/leader) is responsible for applying the task result to the Raft state.
+    async fn run_task(
+        &self,
+        request: tonic::Request<RunTaskRequest>,
+    ) -> Result<tonic::Response<RunTaskResponse>, tonic::Status> {
+        let req = request.into_inner();
+        let workflow_id =
+            parse_workflow_id(&req.workflow_id).map_err(tonic::Status::invalid_argument)?;
+        let task_id = parse_task_id(&req.task_id).map_err(tonic::Status::invalid_argument)?;
+        let inputs = parse_inputs(req.inputs).map_err(tonic::Status::invalid_argument)?;
+
+        let handler = self
+            .registry
+            .get_handler(&workflow_id, &req.handler_name)
+            .await;
+        let Some(handler) = handler else {
+            return Ok(tonic::Response::new(RunTaskResponse {
+                outputs: None,
+                error: Some(format!(
+                    "handler not found: workflow_id={} handler_name={}",
+                    workflow_id, req.handler_name
+                )),
+            }));
+        };
+
+        match handler.execute(task_id, inputs) {
+            Ok(outputs) => Ok(tonic::Response::new(RunTaskResponse {
+                outputs: Some(serde_json::to_string(&outputs).unwrap_or_else(|_| "{}".to_string())),
+                error: None,
+            })),
+            Err(e) => Ok(tonic::Response::new(RunTaskResponse {
+                outputs: None,
+                error: Some(e),
+            })),
+        }
     }
 
     /// Pauses a running workflow

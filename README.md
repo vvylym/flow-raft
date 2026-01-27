@@ -1,108 +1,122 @@
 # FlowRaft
 
-**A distributed, stateful workflow engine in Rust** with Raft-based consensus for deterministic execution and fault tolerance.
+A distributed, stateful workflow engine in Rust with Raft-based consensus for deterministic execution and fault tolerance.
 
-## Overview
+## Features
 
-FlowRaft provides a production-ready workflow engine that treats workflows as replicated state machines. All state transitions are coordinated through Raft consensus, ensuring strong consistency guarantees even under node failures.
+- **Type-safe workflows** – DAGs built from plain Rust functions with compile-time edge checks
+- **Raft-based replication** – Strong consistency and fault tolerance
+- **gRPC API** – Remote workflow management and execution
+- **Observability** – Metrics, history, and event streaming
 
-### Key Features
+## Installation
 
-- **Type-safe workflow definition** via compile-time validated DAGs
-- **Raft-based state replication** for strong consistency
-- **Deterministic state transitions** with explicit recovery semantics
-- **gRPC API** for distributed workflow management
-- **Comprehensive observability** (metrics, history, event streaming)
-- **Production-ready** with 192+ passing tests and extensive benchmarks
+### Prerequisites
 
-## Architecture
+- Rust 1.93+
+- `protoc` (for `flow-raft-proto`)
 
-```
-┌─────────────────────────────────────────┐
-│         API Layer (gRPC/Graph)          │
-├─────────────────────────────────────────┤
-│    Raft Layer (Consensus & Replication) │
-├─────────────────────────────────────────┤
-│  Core Layer (Workflow/Task State Machines)│
-└─────────────────────────────────────────┘
+```bash
+git clone https://github.com/vvylym/flow-raft
+cd flow-raft
+cargo build --release
 ```
 
-**Core Principle**: Only state transitions go through consensus. Task execution happens locally, with effects committed via Raft.
+## Usage
 
-## Quick Start
+Define workflows with typed functions and connect them via edges; output/input types are checked at `build()`:
 
 ```rust
 use flow_raft::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Order { id: String, amount: f64 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Payment { order_id: String, amount: f64, status: String }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Receipt { order_id: String, total: f64 }
+
+fn process_order(order: Order) -> Result<Payment, String> {
+    Ok(Payment { order_id: order.id, amount: order.amount, status: "processed".into() })
+}
+
+fn charge_payment(payment: Payment) -> Result<Receipt, String> {
+    Ok(Receipt { order_id: payment.order_id, total: payment.amount })
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Build workflow
-    let graph = GraphBuilder::new("example")
-        .add_node("task1", "handler1", vec![], vec![], None)
-        .add_node("task2", "handler2", vec![], vec![], None)
-        .add_simple_edge("task1", "task2")
-        .set_root("task1")
-        .build()?;
+    let mut builder = TypedGraphBuilder::new("example");
+    builder
+        .add_node("process", node(process_order), None)
+        .add_node("charge", node(charge_payment), None)
+        .add_simple_edge("process", "charge")
+        .set_root("process");
+    let typed_graph = builder.build()?;
+    let workflow_def = typed_graph.workflow_def("example")?;
 
-    let workflow_def = WorkflowDef::from_graph("example", graph, RetryConfig::default());
-
-    // Create single-node app
-    let app = FlowRaftApp::builder()
+    let app = FlowRaftAppBuilder::new()
         .with_node_id(1)
+        .with_workflows(vec![workflow_def.clone()])
         .build_single_node()
         .await?;
 
-    // Register and execute
-    let workflow_id = app.register_workflow(workflow_def).await?;
-    // ... execute workflow
+    let workflow_id = workflow_def.workflow_id;
+    let registry = HandlerRegistry::new();
+    register_typed_graph_handlers(&registry, workflow_id, &typed_graph).await;
+    // Wire HandlerExecutor and run; see docs/QUICK_START.md
     Ok(())
 }
 ```
 
-## Performance
+**Run a node:** `flowraft-node serve --id 1 --raft 127.0.0.1:5010 --grpc 127.0.0.1:50051 --http 127.0.0.1:9090 --bootstrap`  
+**CLI:** `flowraft workflow define|trigger|get|list|cancel`, `flowraft cluster status`. See [Quick Start](docs/QUICK_START.md).
 
-**Current MVP Performance** (measured on modern hardware):
-- **Workflow registration**: ~500-1000 workflows/sec
-- **Task execution**: ~37µs per task (27K tasks/sec)
-- **Large workflows** (100 tasks): ~3.3ms registration
-- **Parallel workflows**: ~736µs registration
+Run examples (`flow-raft-testing`):
 
-See [PERFORMANCE.md](docs/PERFORMANCE.md) for detailed benchmarks and optimization roadmap.
+```bash
+cargo run -p flow-raft-testing --example simple_single_node
+cargo run -p flow-raft-testing --example conditional_workflow
+cargo run -p flow-raft-testing --example parallel_workflow
+```
+
+## Testing
+
+```bash
+cargo test
+```
+
+Coverage (requires `cargo-llvm-cov`):
+
+```bash
+./scripts/coverage.sh
+```
 
 ## Documentation
 
-- **[Quick Start](docs/QUICK_START.md)**: Get running in minutes
-- **[Architecture](docs/ARCHITECTURE.md)**: System design and components
-- **[API Guide](docs/API_GUIDE.md)**: Complete API reference
-- **[Cluster Operations](docs/CLUSTER_OPERATIONS.md)**: Multi-node deployment
-- **[Performance](docs/PERFORMANCE.md)**: Benchmarks and optimization
+| Document | Description |
+|----------|-------------|
+| [Quick Start](docs/QUICK_START.md) | Installation and first workflow |
+| [API Guide](docs/API_GUIDE.md) | GraphBuilder, App, gRPC client |
+| [Architecture](docs/ARCHITECTURE.md) | Design and components |
+| [Cluster Operations](docs/CLUSTER_OPERATIONS.md) | Multi-node deployment |
+| [Performance](docs/PERFORMANCE.md) | Benchmarks and notes |
+| [Contributing](docs/CONTRIBUTING.md) | How to contribute |
 
 ## Crate Structure
 
-- `flow-raft-core`: Core workflow/task state machines and DAG utilities
-- `flow-raft-raft`: Raft consensus layer and state replication
-- `flow-raft-api`: Graph builder, gRPC client, and workflow definitions
-- `flow-raft-server`: gRPC service implementation and cluster management
-- `flow-raft-observability`: Metrics, history, and event streaming
-
-## Design Principles
-
-1. **Workflows as State Machines**: Explicit state with deterministic transitions
-2. **Raft for Consistency**: All state changes replicated via consensus
-3. **Separation of Concerns**: Coordination (Raft) vs execution (handlers)
-4. **Type Safety**: Compile-time validation of workflow structure
-5. **Observability First**: Built-in metrics, history, and event streaming
-
-## Status
-
-**MVP Complete** ✅
-- [x] Core workflow engine with state machines
-- [x] Raft-based state replication
-- [x] Graph builder API (type-safe & dynamic)
-- [x] gRPC service and client
-- [x] Observability (metrics, history, watcher)
-- [x] Comprehensive test suite (192+ tests)
-- [x] Production examples and benchmarks
+| Crate | Role |
+|-------|------|
+| **flow-raft** | Main facade, re-exports, examples |
+| **flow-raft-core** | Workflow/task state machines, DAG utilities |
+| **flow-raft-raft** | Raft consensus and replication |
+| **flow-raft-api** | Graph builder, gRPC client, workflow definitions |
+| **flow-raft-server** | gRPC service, cluster, task handlers |
+| **flow-raft-observability** | Metrics, history, watcher |
+| **flow-raft-proto** | Protobuf and gRPC definitions |
 
 ## License
 

@@ -5,7 +5,6 @@ package flowraft;
 // FlowRaft gRPC service
 service FlowRaftService {
   // Node Management
-  rpc LaunchNode(LaunchNodeRequest) returns (LaunchNodeResponse);
   rpc GetNodeStatus(GetNodeStatusRequest) returns (NodeStatus);
   
   // Workflow Management
@@ -21,20 +20,24 @@ service FlowRaftService {
   rpc WatchWorkflow(WatchWorkflowRequest) returns (stream WorkflowUpdate);
   rpc GetExecutionHistory(GetExecutionHistoryRequest) returns (ExecutionHistory);
   rpc GetTaskResults(GetTaskResultsRequest) returns (TaskResults);
+
+  // Distributed execution: run a single task on this node (returns output; caller applies state)
+  rpc RunTask(RunTaskRequest) returns (RunTaskResponse);
+}
+
+message RunTaskRequest {
+  string workflow_id = 1;
+  string task_id = 2;
+  string handler_name = 3;
+  optional string inputs = 4; // JSON string
+}
+
+message RunTaskResponse {
+  optional string outputs = 1; // JSON string on success
+  optional string error = 2;   // error message on failure
 }
 
 // Node Management Messages
-message LaunchNodeRequest {
-  uint64 node_id = 1;
-  string mode = 2; // "leader", "follower", or "auto"
-  optional string storage_path = 3;
-}
-
-message LaunchNodeResponse {
-  uint64 node_id = 1;
-  string status = 2;
-}
-
 message GetNodeStatusRequest {
   uint64 node_id = 1;
 }

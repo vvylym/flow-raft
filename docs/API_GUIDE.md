@@ -28,7 +28,7 @@ let graph = GraphBuilder::new("workflow")
 Application layer for workflow management:
 
 ```rust
-let app = FlowRaftApp::builder()
+let app = FlowRaftAppBuilder::new()
     .with_node_id(1)
     .enable_metrics(true)
     .build_single_node()
@@ -76,7 +76,7 @@ registry.register_handler(
 Remote workflow management:
 
 ```rust
-let client = FlowRaftClient::builder()
+let client = FlowRaftClientBuilder::new()
     .with_endpoint("http://localhost:50051")
     .with_timeout(Duration::from_secs(30))
     .build()?;

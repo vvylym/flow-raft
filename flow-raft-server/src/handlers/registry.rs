@@ -10,11 +10,24 @@ use tokio::sync::RwLock;
 use flow_raft_core::WorkflowId;
 use flow_raft_raft::executor::TaskHandler;
 
-/// Per-workflow handler collection
+use flow_raft_api::graph::builder::{ConditionObject, MergeObject};
+
+/// Per-workflow graph specs (merge and conditional) for execution.
 #[derive(Clone, Default)]
+struct WorkflowGraphSpecs {
+    /// Merge target name -> (source names in order, merge function)
+    merge_specs: HashMap<String, (Vec<String>, Arc<dyn MergeObject>)>,
+    /// (source name, then name, else name, condition)
+    conditional_edges: Vec<(String, String, String, Arc<dyn ConditionObject>)>,
+}
+
+/// Per-workflow handler collection
+#[derive(Default)]
 struct WorkflowHandlers {
     /// Map from handler name to handler implementation
     handlers: HashMap<String, Arc<dyn TaskHandler>>,
+    /// Graph specs (merge, conditional) when using TypedGraph
+    graph_specs: WorkflowGraphSpecs,
 }
 
 /// Handler registry that stores handlers per workflow
@@ -131,6 +144,47 @@ impl HandlerRegistry {
             .get(workflow_id)
             .map(|workflow_handlers| workflow_handlers.handlers.contains_key(handler_name))
             .unwrap_or(false)
+    }
+
+    /// Registers merge and conditional specs for a workflow (from TypedGraph).
+    /// Call this after `register_typed_graph_handlers` when using merge/conditional edges.
+    pub async fn register_graph_specs(
+        &self,
+        workflow_id: WorkflowId,
+        merge_specs: HashMap<String, (Vec<String>, Arc<dyn MergeObject>)>,
+        conditional_edges: Vec<(String, String, String, Arc<dyn ConditionObject>)>,
+    ) {
+        let mut workflows = self.workflows.write().await;
+        let h = workflows.entry(workflow_id).or_default();
+        h.graph_specs = WorkflowGraphSpecs {
+            merge_specs,
+            conditional_edges,
+        };
+    }
+
+    /// Returns merge spec for a task (merge target name) if registered.
+    pub async fn get_merge_spec(
+        &self,
+        workflow_id: &WorkflowId,
+        target_name: &str,
+    ) -> Option<(Vec<String>, Arc<dyn MergeObject>)> {
+        let workflows = self.workflows.read().await;
+        workflows
+            .get(workflow_id)
+            .and_then(|h| h.graph_specs.merge_specs.get(target_name))
+            .cloned()
+    }
+
+    /// Returns conditional edges (source, then, else, condition) for a workflow.
+    pub async fn get_conditional_edges(
+        &self,
+        workflow_id: &WorkflowId,
+    ) -> Vec<(String, String, String, Arc<dyn ConditionObject>)> {
+        let workflows = self.workflows.read().await;
+        workflows
+            .get(workflow_id)
+            .map(|h| h.graph_specs.conditional_edges.clone())
+            .unwrap_or_default()
     }
 }
 

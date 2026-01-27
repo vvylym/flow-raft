@@ -55,32 +55,46 @@ async fn test_grpc_service_get_node_status() {
 }
 
 #[tokio::test]
-async fn test_grpc_service_launch_node() {
-    let service = create_test_service().await;
-    let request = tonic::Request::new(LaunchNodeRequest {
-        node_id: 1,
-        mode: "leader".to_string(),
-        storage_path: None,
-    });
-    let response = service.launch_node(request).await;
-    // Should return unimplemented
-    assert!(response.is_err());
-    assert!(response.unwrap_err().code() == tonic::Code::Unimplemented);
-}
-
-#[tokio::test]
 async fn test_grpc_service_define_workflow() {
     let service = create_test_service().await;
+    let definition = serde_json::json!({
+        "name": "test_workflow",
+        "graph": {
+            "name": "test_workflow",
+            "nodes": [{
+                "name": "task1",
+                "task_id": "00000000-0000-0000-0000-000000000001",
+                "handler": "handler1",
+                "inputs": [],
+                "outputs": [],
+                "timeout_secs": null
+            }],
+            "edges": [],
+            "root": "task1"
+        },
+        "default_retry_config": { "max_attempts": 3 }
+    })
+    .to_string();
     let request = tonic::Request::new(DefineWorkflowRequest {
         name: "test_workflow".to_string(),
-        definition: serde_json::json!({
-            "nodes": [{"name": "task1", "handler": "handler1"}],
-            "edges": []
-        })
-        .to_string(),
+        definition,
     });
     let response = service.define_workflow(request).await;
-    assert!(response.is_ok());
+    assert!(response.is_ok(), "define_workflow should succeed");
+    let def = response.unwrap().into_inner();
+    assert!(!def.workflow_id.is_empty());
+    assert_eq!(def.name, "test_workflow");
+    assert_eq!(def.status, "draft");
+
+    // Workflow should be persisted: get_workflow finds it
+    let get_req = tonic::Request::new(GetWorkflowRequest {
+        workflow_id: def.workflow_id.clone(),
+    });
+    let get_resp = service.get_workflow(get_req).await;
+    assert!(
+        get_resp.is_ok(),
+        "get_workflow should find the defined workflow"
+    );
 }
 
 #[tokio::test]

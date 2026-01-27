@@ -24,7 +24,7 @@ FlowRaft supports both single-node and multi-node cluster deployments. This guid
 ```rust
 use flow_raft::prelude::*;
 
-let app = FlowRaftApp::builder()
+let app = FlowRaftAppBuilder::new()
     .with_node_id(1)
     .with_workflows(vec![workflow_def])
     .enable_metrics(true)
@@ -34,47 +34,40 @@ let app = FlowRaftApp::builder()
 
 ### Multi-Node Cluster
 
-```rust
-use flow_raft::prelude::*;
+Run one `flowraft-node serve` process per node. The bootstrap node uses `--bootstrap` and `--peers "2=host2:port,3=host3:port"`; other nodes use empty `--peers` to join. Use `flowraft cluster status` to inspect the cluster. See `scripts/serve.sh` for a local 3-node setup.
 
-// Launch a 3-node cluster
-let nodes = launch_cluster(vec![
-    (1, NodeMode::Leader, vec![workflow1_def.clone()]),
-    (2, NodeMode::Follower, vec![workflow2_def.clone()]),
-    (3, NodeMode::Follower, vec![]),
-])
-.await?;
-```
+### TCP transport (production)
 
-## Builder Pattern
+For real multi-node deployments across machines, use the TCP Raft transport instead of the in-memory one:
 
-The builder pattern provides a consistent API for both single-node and cluster deployments:
+- **[TcpNetworkFactory]**: Raft network that sends AppendEntries, Vote, and InstallSnapshot over TCP (bincode-framed).
+- **[TcpRaftRpcServer]**: On each node, run an RPC server bound to that node’s Raft address; it accepts RPCs and dispatches them to the local `Raft`.
+- **[tcp_nodes]**: Builds the `(NodeId -> BasicNode)` map so each node’s [BasicNode::addr] is the `"host:port"` where [TcpRaftRpcServer] listens.
+- **FlowRaftNode::initialize_cluster_with_nodes**: Like `initialize_cluster`, but takes that map so Raft can reach peers over TCP.
+
+Each node must:
+
+1. Create `FlowRaftNode::new(..., TcpNetworkFactory::new(), log_store, state_machine)` (separate `LogStore`/`StateMachineStore` per node).
+2. Start `TcpRaftRpcServer::new(node.raft.clone(), bind_addr).spawn()` (or `.run()`) before initializing the cluster.
+3. On the bootstrap node, call `initialize_cluster_with_nodes(tcp_nodes([(1, "host:port"), ...]))`.
+
+See `examples/tcp_multi_node_cluster.rs` for a 3-node TCP example.
+
+## Builder Pattern (single-node)
+
+For in-process single-node usage:
 
 ```rust
 // Single node
-let app = FlowRaftApp::builder()
+let app = FlowRaftAppBuilder::new()
     .with_node_id(1)
     .with_workflows(vec![workflow_def])
     .enable_metrics(true)
     .build_single_node()
     .await?;
-
-// Cluster node (leader)
-let leader = FlowRaftApp::builder()
-    .with_node_id(1)
-    .with_workflows(vec![workflow_def])
-    .enable_metrics(true)
-    .build_cluster_node(NodeRole::Leader, None)
-    .await?;
-
-// Cluster node (follower)
-let follower = FlowRaftApp::builder()
-    .with_node_id(2)
-    .with_workflows(vec![workflow_def])
-    .enable_metrics(true)
-    .build_cluster_node(NodeRole::Follower, Some("http://leader:8080".to_string()))
-    .await?;
 ```
+
+For multi-node, run `flowraft-node serve` on each machine and use the `flowraft` CLI or gRPC client.
 
 ## Leader Election
 
@@ -86,12 +79,7 @@ FlowRaft uses Raft consensus for leader election:
 
 ### Monitoring Leader Election
 
-```rust
-// Check cluster status
-let status = node.cluster_status().await;
-println!("Current leader: {:?}", status.leader);
-println!("Node role: {:?}", status.role);
-```
+Use the CLI: `flowraft cluster status [--node-id 1]` to see the current leader and node role. The gRPC `GetNodeStatus` can be used from a client.
 
 ## State Replication
 
@@ -138,53 +126,25 @@ During a network partition:
 
 ### Adding a Node
 
-```rust
-// Add a new follower node
-let new_node = launch_cluster_node(
-    NodeConfig::new(4, NodeMode::Follower),
-    "http://leader:8080".to_string(),
-)
-.await?;
-```
+Start a new `flowraft-node serve` with the appropriate `--id` and `--peers` (or join config). The new node will join the existing cluster.
 
 ### Removing a Node
 
-```rust
-// Gracefully shutdown a node
-node.shutdown().await?;
-```
+Stop the `flowraft-node` process. As long as a quorum remains, the cluster continues. The node can rejoin later by restarting `flowraft-node serve` with the same `--peers` or join configuration.
 
 ### Restarting a Node
 
-```rust
-// Restart a failed node
-let restarted_node = launch_cluster_node(
-    NodeConfig::new(node_id, NodeMode::Follower),
-    leader_address,
-)
-.await?;
-```
+Restart the `flowraft-node serve` process. It will rejoin and catch up from the Raft log.
 
 ## Workflow Distribution
 
 ### Registering Workflows
 
-Workflows can be registered on any node:
-
-```rust
-// Register on leader
-nodes[0].register_workflow(workflow_def).await?;
-
-// Register on follower
-nodes[1].register_workflow(workflow_def).await?;
-```
+Use `flowraft workflow define --file /path/to/workflow.json` (or the gRPC `DefineWorkflow`) to register workflows. The defining request is replicated via Raft.
 
 ### Workflow Execution
 
-Tasks can be executed on any node:
-- Leader can execute tasks
-- Followers can execute tasks
-- State is replicated to all nodes
+Use `flowraft workflow trigger` or the gRPC `TriggerWorkflow`. Tasks can run on any node; state is replicated to all nodes.
 
 ## Metrics and Observability
 
@@ -205,14 +165,7 @@ let summary = metrics.get_cluster_metrics().await;
 
 ### Prometheus Integration
 
-FlowRaft exposes metrics via Prometheus:
-
-```rust
-// Start metrics server
-start_metrics_server(8080).await?;
-
-// Metrics available at http://localhost:8080/metrics
-```
+`flowraft-node serve --http 127.0.0.1:9090` exposes `/health` and `/metrics` on the HTTP port. Point Prometheus at `http://<node>:9090/metrics`.
 
 ## Production Best Practices
 
@@ -232,18 +185,11 @@ Set up alerts for:
 
 ### 3. Graceful Shutdown
 
-Always use `shutdown()` for graceful node shutdown:
-- Stops accepting new workflows
-- Waits for in-flight operations
-- Records shutdown metrics
+Stop `flowraft-node` cleanly (e.g. SIGTERM) so it can flush and close. Avoid SIGKILL when possible.
 
 ### 4. Regular Health Checks
 
-Monitor cluster health:
-```rust
-let status = node.cluster_status().await;
-// Check: status.leader, status.nodes, status.role
-```
+Monitor cluster health with `flowraft cluster status` and HTTP `GET /health` on each node’s `--http` address.
 
 ### 5. Backup and Recovery
 
@@ -251,15 +197,9 @@ let status = node.cluster_status().await;
 - Backup Raft logs
 - Test recovery procedures
 
-## Example: Production Cluster
+## Example: TCP multi-node cluster
 
-See `examples/production_cluster.rs` for a complete example demonstrating:
-- 3-node cluster setup
-- Leader/follower configuration
-- Node shutdown scenarios
-- Leader election
-- Node restart and rejoin
-- Metrics monitoring
+See `examples/tcp_multi_node_cluster.rs` for a 3-node TCP example. For production, run `flowraft-node serve` on each host and use `scripts/serve.sh` or your orchestrator.
 
 ## Troubleshooting
 

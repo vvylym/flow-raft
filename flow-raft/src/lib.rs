@@ -14,23 +14,26 @@ pub use flow_raft_raft::{
     FlowRaftApp, FlowRaftNode, RaftConfig, TypeConfig,
     config::default_config,
     executor::{TaskHandler, WorkflowExecutor},
-    network::MemoryNetworkFactory,
+    network::{MemoryNetworkFactory, TcpNetworkFactory, TcpRaftRpcServer, tcp_nodes},
     storage::{LogStore, StateMachineStore},
     types::Request,
 };
 
-// Re-export API types
+// Re-export API types (single GraphBuilder, builder pattern; use node/condition/split/merge/switch)
 pub use flow_raft_api::{
     client::{FlowRaftClient, WorkflowExecutionId, WorkflowStatus},
     graph::builder::{ConditionObject, MergeObject, SplitObject},
     graph::{GraphBuilder, NodeName, graph_to_workflow},
-    workflow::{WorkflowBuilder, WorkflowDef},
+    workflow::WorkflowDef,
 };
 
 #[doc = "Graph builder API module"]
 pub mod graph {
     pub use flow_raft_api::graph::*;
 }
+
+mod typed_handlers;
+pub use typed_handlers::register_typed_graph_handlers;
 
 #[doc = "Handler registry and executor module"]
 pub mod handlers {
@@ -41,12 +44,7 @@ pub mod handlers {
 pub use flow_raft_observability::*;
 
 // Re-export server types (with specific exports to avoid conflicts)
-pub use flow_raft_server::{
-    cluster::{ClusterNode, ClusterStatus, NodeRole},
-    handlers::{HandlerExecutor, HandlerRegistry},
-    node::launcher::{launch_cluster_node, launch_single_node, start_metrics_server},
-    node::{NodeConfig, NodeMode},
-};
+pub use flow_raft_server::handlers::{HandlerExecutor, HandlerRegistry};
 
 /// Prelude module for convenient imports
 ///
@@ -57,34 +55,32 @@ pub mod prelude {
         RetryConfig, TaskExecution, TaskId, TaskState, WorkflowId, WorkflowSnapshot, WorkflowState,
     };
 
-    // Graph building
+    // Graph building: single GraphBuilder, builder pattern; wrap fns with node/condition/split/merge/switch
+    pub use crate::register_typed_graph_handlers;
     pub use flow_raft_api::graph::builder::{
-        ConditionObject, MergeObject, NodeFunction, SplitObject, wrap_function,
+        ConditionObject, MergeObject, NodeFunction, SplitObject,
     };
-    pub use flow_raft_api::graph::{GraphBuilder, NodeName, graph_to_workflow};
+    pub use flow_raft_api::graph::{
+        GraphBuilder, NodeName, TypedCondition, TypedGraph, TypedGraphBuilder, TypedMerge,
+        TypedNodeFunction, TypedSplit, TypedSwitch, condition, graph_to_workflow, merge, node,
+        node_async, node_async_ok, node_ok, split, switch,
+    };
 
     // Workflow definition
-    pub use flow_raft_api::workflow::{WorkflowBuilder, WorkflowDef};
+    pub use flow_raft_api::workflow::WorkflowDef;
 
     // Client API
     pub use flow_raft_api::client::{
-        ClientError, FlowRaftClient, WorkflowExecutionId, WorkflowStatus,
+        ClientError, FlowRaftClient, FlowRaftClientBuilder, WorkflowExecutionId, WorkflowStatus,
     };
 
     // Raft/App
-    pub use flow_raft_raft::app::builder::{AppBuilderError, FlowRaftAppBuilder};
     pub use flow_raft_raft::config::default_config;
+    pub use flow_raft_raft::{AppBuilderError, FlowRaftAppBuilder};
     pub use flow_raft_raft::{FlowRaftApp, FlowRaftNode, RaftConfig};
 
     // Executor
     pub use flow_raft_raft::executor::{TaskHandler, WorkflowExecutor};
-
-    // Cluster/Node
-    pub use flow_raft_server::cluster::{ClusterNode, ClusterStatus, NodeRole};
-    pub use flow_raft_server::node::launcher::{
-        launch_cluster, launch_cluster_node, launch_single_node,
-    };
-    pub use flow_raft_server::node::{NodeConfig, NodeMode};
 
     // Handlers
     pub use flow_raft_server::handlers::{HandlerExecutor, HandlerRegistry};

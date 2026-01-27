@@ -11,12 +11,14 @@
 //! # Example
 //! ```no_run
 //! use flow_raft_api::client::FlowRaftClient;
-//! use flow_raft_api::workflow::WorkflowDef;
+//! use flow_raft_api::graph::{node, TypedGraphBuilder};
 //! use serde_json::json;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = FlowRaftClient::new("http://localhost:50051");
-//! let workflow = WorkflowDef::from_graph(/* ... */);
+//! let mut b = TypedGraphBuilder::new("example");
+//! b.add_node("n", node(|_: ()| Ok::<(), String>(())), None).set_root("n");
+//! let workflow = b.build().unwrap().workflow_def("example").unwrap();
 //! let execution_id = client.submit_workflow(workflow, json!({})).await?;
 //! let status = client.get_workflow_status(execution_id).await?;
 //! # Ok(())
@@ -212,7 +214,8 @@ pub enum ClientError {
 
 /// FlowRaft client for submitting and managing workflows
 pub struct FlowRaftClient {
-    /// gRPC client
+    /// gRPC client (lazily initialized)
+    #[allow(dead_code)]
     grpc_client: Option<crate::client::grpc::GrpcClient>,
     /// Server endpoint
     endpoint: String,
@@ -234,11 +237,6 @@ impl FlowRaftClient {
         }
     }
 
-    /// Create a new client using a builder
-    pub fn builder() -> FlowRaftClientBuilder {
-        FlowRaftClientBuilder::new()
-    }
-
     /// Set the timeout for operations
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
@@ -246,6 +244,7 @@ impl FlowRaftClient {
     }
 
     /// Get or create the gRPC client
+    #[allow(dead_code)]
     async fn get_grpc_client(
         &mut self,
     ) -> Result<&mut crate::client::grpc::GrpcClient, ClientError> {
@@ -274,6 +273,41 @@ impl FlowRaftClient {
         })?;
 
         Ok(FlowRaftServiceClient::new(channel))
+    }
+
+    /// Trigger an existing workflow by ID with input.
+    ///
+    /// Calls the TriggerWorkflow RPC directly. The workflow must already exist
+    /// on the server (e.g. created via run_grpc_on_cluster or pre-registered).
+    /// Use [submit_workflow](Self::submit_workflow) to define and trigger in one
+    /// call when the server supports full define_workflow.
+    ///
+    /// # Arguments
+    /// * `workflow_id` - The workflow ID
+    /// * `input` - Input data for the workflow
+    ///
+    /// # Returns
+    /// The execution ID (same as workflow_id for this RPC)
+    pub async fn trigger_workflow_by_id(
+        &self,
+        workflow_id: WorkflowId,
+        input: Value,
+    ) -> Result<WorkflowExecutionId, ClientError> {
+        let mut client = self.get_service_client().await?;
+        let trigger_request = TriggerWorkflowRequest {
+            workflow_id: workflow_id.to_string(),
+            inputs: Some(serde_json::to_string(&input).map_err(|e| {
+                ClientError::InvalidInput(format!("Failed to serialize inputs: {}", e))
+            })?),
+        };
+        let trigger_response = client
+            .trigger_workflow(Request::new(trigger_request))
+            .await
+            .map_err(|e| ClientError::Server(format!("gRPC error triggering workflow: {}", e)))?
+            .into_inner();
+        WorkflowId::parse(&trigger_response.execution_id)
+            .map(WorkflowExecutionId)
+            .map_err(|e| ClientError::InvalidInput(format!("Invalid execution_id: {}", e)))
     }
 
     /// Submit a workflow with input and get execution ID
@@ -328,6 +362,10 @@ impl FlowRaftClient {
                                     let targets_vec: Vec<&str> = targets.iter().map(|t| t.as_ref()).collect();
                                     serde_json::json!({"type": "split", "targets": targets_vec})
                                 }
+                                crate::graph::builder::EdgeSpec::Switch { branches, .. } => {
+                                    let branches_vec: Vec<&str> = branches.iter().map(|b| b.as_ref()).collect();
+                                    serde_json::json!({"type": "switch", "branches": branches_vec})
+                                }
                             }
                         }).collect::<Vec<_>>()
                     })
@@ -378,6 +416,65 @@ impl FlowRaftClient {
         WorkflowId::parse(&trigger_response.execution_id)
             .map(WorkflowExecutionId)
             .map_err(|e| ClientError::InvalidInput(format!("Invalid execution_id: {}", e)))
+    }
+
+    /// Run a single task on a node (for distributed execution).
+    /// The caller is responsible for applying the result to the Raft state.
+    ///
+    /// # Arguments
+    /// * `endpoint` - gRPC endpoint of the node (e.g. "http://127.0.0.1:50052")
+    /// * `workflow_id` - Workflow ID
+    /// * `task_id` - Task ID
+    /// * `handler_name` - Handler name registered for that workflow on the node
+    /// * `inputs` - Task inputs (JSON)
+    ///
+    /// # Returns
+    /// Task outputs on success, or error string on failure.
+    pub async fn run_task_on(
+        &self,
+        endpoint: &str,
+        workflow_id: WorkflowId,
+        task_id: TaskId,
+        handler_name: &str,
+        inputs: Value,
+    ) -> Result<Value, ClientError> {
+        let mut client = if endpoint == self.endpoint {
+            self.get_service_client().await?
+        } else {
+            let channel = tonic::transport::Endpoint::from_shared(endpoint.to_string())
+                .map_err(|e| {
+                    ClientError::Connection(format!("Invalid endpoint '{}': {}", endpoint, e))
+                })?
+                .timeout(self.timeout)
+                .connect_timeout(Duration::from_secs(5))
+                .connect()
+                .await
+                .map_err(|e| {
+                    ClientError::Connection(format!("Failed to connect to '{}': {}", endpoint, e))
+                })?;
+            FlowRaftServiceClient::new(channel)
+        };
+        let req = RunTaskRequest {
+            workflow_id: workflow_id.to_string(),
+            task_id: task_id.to_string(),
+            handler_name: handler_name.to_string(),
+            inputs: Some(serde_json::to_string(&inputs).map_err(|e| {
+                ClientError::InvalidInput(format!("Failed to serialize inputs: {}", e))
+            })?),
+        };
+        let r = client
+            .run_task(Request::new(req))
+            .await
+            .map_err(|e| ClientError::Server(format!("RunTask gRPC error: {}", e)))?
+            .into_inner();
+        if let Some(e) = r.error {
+            return Err(ClientError::Server(e));
+        }
+        let out = r.outputs.ok_or_else(|| {
+            ClientError::Server("RunTask returned no outputs and no error".to_string())
+        })?;
+        serde_json::from_str(&out)
+            .map_err(|e| ClientError::InvalidInput(format!("Invalid outputs JSON: {}", e)))
     }
 
     /// Get workflow status

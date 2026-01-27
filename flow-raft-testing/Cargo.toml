@@ -1,0 +1,76 @@
+[package]
+name = "flow-raft-testing"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Workflows, examples, and benchmarks for FlowRaft (testing and demos)"
+publish = false
+
+[dependencies]
+flow-raft = { path = "../flow-raft" }
+flow-raft-api = { path = "../flow-raft-api" }
+flow-raft-core = { path = "../flow-raft-core" }
+flow-raft-observability = { path = "../flow-raft-observability" }
+flow-raft-raft = { path = "../flow-raft-raft" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros"] }
+tracing-subscriber = { workspace = true }
+
+[[example]]
+name = "complex_workflow"
+path = "examples/complex_workflow.rs"
+
+[[example]]
+name = "simple_single_node"
+path = "examples/simple_single_node.rs"
+
+[[example]]
+name = "conditional_workflow"
+path = "examples/conditional_workflow.rs"
+
+[[example]]
+name = "parallel_workflow"
+path = "examples/parallel_workflow.rs"
+
+[[example]]
+name = "advanced_error_handling"
+path = "examples/advanced_error_handling.rs"
+
+[[example]]
+name = "advanced_parallelism"
+path = "examples/advanced_parallelism.rs"
+
+[[example]]
+name = "advanced_conditionals"
+path = "examples/advanced_conditionals.rs"
+
+[[example]]
+name = "advanced_observability"
+path = "examples/advanced_observability.rs"
+
+[[example]]
+name = "advanced_client"
+path = "examples/advanced_client.rs"
+
+[[example]]
+name = "tcp_multi_node_cluster"
+path = "examples/tcp_multi_node_cluster.rs"
+
+[[bench]]
+name = "registration"
+path = "benches/registration.rs"
+harness = false
+
+[[bench]]
+name = "execution"
+path = "benches/execution.rs"
+harness = false
+
+[dev-dependencies]
+criterion = "0.8"
+
+[lints]
+workspace = true

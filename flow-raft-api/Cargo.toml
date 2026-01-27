@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Public API for FlowRaft workflow definition and client"
+readme = "README.md"
 
 [dependencies]
 flow-raft-core = { path = "../flow-raft-core" }
@@ -16,7 +17,7 @@ futures.workspace = true
 indexmap.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["time", "net"] }
+tokio = { workspace = true, features = ["rt", "time", "net"] }
 tokio-stream.workspace = true
 rayon.workspace = true
 tonic = { workspace = true, features = ["transport"] }

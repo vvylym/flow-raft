@@ -1,15 +1,14 @@
 #!/bin/bash
-# Run coverage with cargo-llvm-cov (>= 85% line coverage)
+# Run coverage with cargo-llvm-cov. Enforces >= 85% **line** coverage on the
+# measured scope (see README: excluded paths are thin I/O glue or integration-heavy).
 #
 # Usage: ./scripts/coverage.sh
-#
-# Excludes binary/integration-only and generated glue that is not unit-tested:
-#   network/tcp, client/grpc, client/mod, prometheus, tracing, graph/builder
 
-set -e
+set -euo pipefail
 
-EXCLUDE='(network/tcp|client/grpc\.rs|prometheus\.rs|tracing\.rs|graph/builder\.rs|client/mod\.rs)'
+EXCLUDE='(network/tcp|client/grpc\.rs|prometheus\.rs|tracing\.rs|graph/builder\.rs|client/mod\.rs|cli_handlers\.rs|launcher\.rs)'
 
-cargo llvm-cov --all-features --workspace --tests --no-clean \
+exec cargo llvm-cov --all-features --workspace --tests --no-clean \
   --ignore-filename-regex="$EXCLUDE" \
-  --summary-only
+  --summary-only \
+  --fail-under-lines 85

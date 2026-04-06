@@ -13,7 +13,7 @@ A distributed, stateful workflow engine in Rust with Raft-based consensus for de
 
 ### Prerequisites
 
-- Rust 1.93+
+- **Rust toolchain:** minimum supported version (MSRV) is **1.85** (see workspace `rust-version` in the root `Cargo.toml`).
 - `protoc` (for `flow-raft-proto`)
 
 ```bash
@@ -94,6 +94,8 @@ Coverage (requires `cargo-llvm-cov`):
 ```bash
 ./scripts/coverage.sh
 ```
+
+**Coverage gate:** the script enforces at least **85% line coverage** over the workspace for the paths it measures. The following are **not** counted toward that percentage: generated or integration-heavy client and network glue (`flow-raft-api` client surfaces, TCP network helpers), Prometheus and tracing setup shims, the large graph `builder` module, and **thin `flow-raft` / `flow-raft-server` CLI entrypoints** (`cli_handlers.rs`, `launcher.rs`) that mostly issue gRPC calls and print results—those paths are better covered by manual or integration tests against a live server. CI runs the same scope as `./scripts/coverage.sh`.
 
 ## Documentation
 

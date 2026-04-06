@@ -1,9 +1,9 @@
 //! Binary tests: flowraft-node and flowraft (--help, minimal invoke, health).
 
-use std::process::{Child, Command as StdCommand};
+use std::process::{Child, Command};
 use std::time::Duration;
 
-use assert_cmd::cargo::cargo_bin_cmd;
+use assert_cmd::cargo::{cargo_bin, cargo_bin_cmd};
 use portpicker::pick_unused_port;
 use predicates::prelude::*;
 
@@ -54,15 +54,10 @@ async fn flowraft_node_serve_health_responds() {
     let raft_port = pick_unused_port().expect("free port");
     let grpc_port = pick_unused_port().expect("free port");
 
-    let bin = std::env::var("CARGO_BIN_EXE_flowraft_node").unwrap_or_else(|_| {
-        let mut p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        p.push("..");
-        p.push("target");
-        p.push("debug");
-        p.push("flowraft-node");
-        p.to_string_lossy().into_owned()
-    });
-    let child = StdCommand::new(&bin)
+    // Resolve via `assert_cmd` so the path matches the active target dir (e.g.
+    // `target/llvm-cov-target` under `cargo llvm-cov`), not a hard-coded `target/debug/`.
+    let bin = cargo_bin("flowraft-node");
+    let child = Command::new(bin)
         .args([
             "serve",
             "--id",
